@@ -2,6 +2,7 @@ import { autoRetry } from '@grammyjs/auto-retry';
 import { Bot } from 'grammy';
 
 import { logger } from './logger.js';
+import { registerAdminCommand } from './handlers/admin.js';
 import { registerCallbackHandler } from './handlers/callbacks.js';
 import { registerCommands } from './handlers/commands.js';
 import { registerInlineHandler } from './handlers/inline.js';
@@ -22,6 +23,7 @@ export function createBot(token: string): Bot {
 
   registerAccessMiddleware(bot);
   registerCommands(bot);
+  registerAdminCommand(bot);
   registerOwnerCommands(bot);
   registerStatsCommand(bot);
   registerLinkHandler(bot);

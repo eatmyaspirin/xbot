@@ -112,7 +112,7 @@ describe('StatsStore', () => {
     expect(text).toContain('Links: 1 (today 1)');
     expect(text).toContain('Last 7 days (UTC)');
     expect(text).toContain('Top groups');
-    expect(text).toContain('Group One — 1 links');
+    expect(text).toContain('Group One - 1 links');
     expect(text).toContain('Since');
   });
 });

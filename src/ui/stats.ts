@@ -37,7 +37,7 @@ export function formatStats(stats: StatsSnapshot): string {
   if (stats.topChats.length > 0) {
     lines.push('', 'Top groups');
     stats.topChats.forEach((chat, index) => {
-      lines.push(`${index + 1}. ${truncate(chat.title)} — ${chat.links} links`);
+      lines.push(`${index + 1}. ${truncate(chat.title)} - ${chat.links} links`);
     });
   }
 

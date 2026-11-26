@@ -74,7 +74,7 @@ export function registerOwnerCommands(bot: Bot): void {
     });
 
     await ctx.reply(
-      `Allowed chat ${entry.id}${entry.title ? ` — ${entry.title}` : ''}.`,
+      `Allowed chat ${entry.id}${entry.title ? ` - ${entry.title}` : ''}.`,
     );
   });
 
@@ -135,7 +135,7 @@ export function registerOwnerCommands(bot: Bot): void {
       const shown = chats.slice(0, 50);
       for (const chat of shown) {
         lines.push(
-          `• ${chat.id}${chat.title ? ` — ${chat.title}` : ''}${
+          `• ${chat.id}${chat.title ? ` - ${chat.title}` : ''}${
             chat.type ? ` (${chat.type})` : ''
           }`,
         );

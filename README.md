@@ -1,6 +1,6 @@
 # xbot
 
-A Telegram bot that turns **X (Twitter) posts with multiple photos, videos or GIFs into a gallery** — with a grid view, a one-message carousel, native albums, an image-only mode, and inline sharing.
+A Telegram bot that turns **X (Twitter) posts with multiple photos, videos or GIFs into a gallery** - with a grid view, a one-message carousel, native albums, an image-only mode, and inline sharing.
 
 Paste a post link and the bot opens a contact sheet of the whole gallery:
 
@@ -11,7 +11,7 @@ Paste a post link and the bot opens a contact sheet of the whole gallery:
 [ Open on X ]
 ```
 
-Every button edits the **same Telegram message**, so switching views does not spam the chat. Metadata comes from the public [FxTwitter](https://github.com/FxEmbed/FxEmbed) API, with VxTwitter as a fallback — no X developer account or API key required.
+Every button edits the **same Telegram message**, so switching views does not spam the chat. Metadata comes from the public [FxTwitter](https://github.com/FxEmbed/FxEmbed) API, with VxTwitter as a fallback - no X developer account or API key required.
 
 ## Views
 
@@ -69,7 +69,7 @@ To enable inline mode in BotFather:
 
 1. Open [@BotFather](https://t.me/BotFather).
 2. Send `/setinline`, select your bot, and enter a placeholder such as `Paste an X link…`.
-3. Restart or just use the bot — inline queries are now delivered.
+3. Restart or just use the bot - inline queries are now delivered.
 
 Albums are not available inside inline messages because Telegram inline results cannot create media groups. Grid and Carousel are fully supported.
 
@@ -77,10 +77,11 @@ Albums are not available inside inline messages because Telegram inline results 
 
 By default the bot only responds to direct messages in the owner's private chat and explicitly allowed chats. Inline queries are exempt because Telegram does not expose their target chat ID; see **Inline mode** above.
 
-The owner is configured with `OWNER_ID` — a numeric Telegram user ID. Only that user can change the allowlist. Owner commands:
+The owner is configured with `OWNER_ID` - a numeric Telegram user ID. Only that user can change the allowlist. Run `/admin` in the bot to print this reference:
 
 | Command | Purpose |
 | --- | --- |
+| `/admin` | Show the admin command reference. |
 | `/allow` | Run inside a group to allow that group. |
 | `/allow <chat_id>` | Allow a specific chat by numeric ID. |
 | `/deny` | Run inside a group to remove that group. |
@@ -176,8 +177,8 @@ To reset stats, stop the bot and delete `DATA_DIR/stats.db` (plus any `-wal`/`-s
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `BOT_TOKEN` | — | **Required.** Telegram bot token from BotFather. |
-| `OWNER_ID` | — | **Required.** Numeric Telegram user ID allowed to manage the allowlist. |
+| `BOT_TOKEN` | - | **Required.** Telegram bot token from BotFather. |
+| `OWNER_ID` | - | **Required.** Numeric Telegram user ID allowed to manage the allowlist. |
 | `DATA_DIR` | `./data` | Writable directory for `state.json` (allowlist) and `stats.db` (usage counters). |
 | `X_API_BASE` | `https://api.fxtwitter.com` | Primary post-metadata provider. |
 | `X_FALLBACK_API_BASE` | `https://api.vxtwitter.com` | Fallback provider. Set empty to disable. |
@@ -196,14 +197,14 @@ To reset stats, stop the bot and delete `DATA_DIR/stats.db` (plus any `-wal`/`-s
 1. `handlers/links.ts` extracts status IDs from message text. It parses the URL path instead of relying on a fragile one-line regex.
 2. `services/x` fetches the post as JSON from FxTwitter (`/2/status/<id>`), falling back to VxTwitter (`/status/<id>`). Both are normalized into one `Post` shape.
 3. Photo galleries carry a provider-rendered mosaic (`mosaic.fxtwitter.com`), used as the grid image. Posts without one still get carousel and album views. Quote posts with no media of their own follow the quoted post.
-4. The first view is sent as a single message with stateless inline buttons. Callback data is `xb:<mode>:<postId>:<index>:<text>` — no session store.
+4. The first view is sent as a single message with stateless inline buttons. Callback data is `xb:<mode>:<postId>:<index>:<text>` - no session store.
 5. Carousel and grid taps rehydrate the post from cache (or refetch it), download the requested media and call `editMessageMedia`. Inline messages are edited with public URLs, because Telegram does not allow uploading new files to inline messages.
 6. Album taps download up to 10 items and call `sendMediaGroup`. Oversized items are skipped to stay inside Telegram's limits.
 7. Download taps write media to a request-specific temp directory, ZIP multiple files with `fflate`, send the result as a document, then delete the directory in a `finally` block.
 8. Post JSON, media bytes and grid images live in bounded in-memory caches. Persistent state is the chat allowlist in `DATA_DIR/state.json` and usage counters in `DATA_DIR/stats.db`.
 9. The access middleware touches users/chats and records message and inline-query events. Links, downloads, albums and errors are recorded by their handlers. `/stat` aggregates the SQLite tables into a plain-text report.
 
-Because callback data only contains the post ID, mode and index, the gallery keeps working even if the bot restarts — as long as X still serves the post.
+Because callback data only contains the post ID, mode and index, the gallery keeps working even if the bot restarts - as long as X still serves the post.
 
 ```text
 src/
