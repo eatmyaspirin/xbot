@@ -73,6 +73,7 @@ export const config = {
   xFallbackApiBase: optionalBase('X_FALLBACK_API_BASE', 'https://api.vxtwitter.com'),
   maxPhotoBytes: positiveInt('MAX_PHOTO_MB', 10) * MB,
   maxVideoBytes: positiveInt('MAX_VIDEO_MB', 45) * MB,
+  maxDownloadBytes: positiveInt('MAX_DOWNLOAD_MB', 45) * MB,
   mediaCacheBytes: positiveInt('MEDIA_CACHE_MB', 64) * MB,
   cacheTtlMs: positiveInt('CACHE_TTL_MINUTES', 30) * 60_000,
   requestTimeoutMs: positiveInt('REQUEST_TIMEOUT_SECONDS', 20) * 1000,

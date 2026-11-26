@@ -141,9 +141,12 @@ describe('callback data', () => {
     });
   });
 
-  it('parses grid and album actions', () => {
+  it('parses grid, album and download actions', () => {
     expect(parseCallbackData(buildCallbackData('grid', '123', 0, true))?.mode).toBe('grid');
     expect(parseCallbackData(buildCallbackData('album', '123', 0, true))?.mode).toBe('album');
+    expect(parseCallbackData(buildCallbackData('download', '123', 0, true))?.mode).toBe(
+      'download',
+    );
   });
 
   it('still understands first-release carousel buttons', () => {
@@ -174,14 +177,19 @@ describe('carousel keyboard', () => {
     expect(callbackDataAt(rows, 0, 2)).toBe(buildCallbackData('carousel', '1234567890', 1));
     expect(textAt(rows, 1, 0)).toBe('🖼 Grid');
     expect(textAt(rows, 1, 1)).toBe('📚 Album');
+    expect(textAt(rows, 1, 2)).toBe('⬇️ Download');
+    expect(callbackDataAt(rows, 1, 2)).toBe(
+      buildCallbackData('download', '1234567890', 0, true),
+    );
     expect(textAt(rows, 2, 0)).toBe('📝 Hide text');
     expect(urlAt(rows, 3, 0)).toBe('https://x.com/user/status/1234567890');
   });
 
-  it('hides the album button in inline mode', () => {
+  it('hides album and download buttons in inline mode', () => {
     const rows = buildCarouselKeyboard(makePost(), 0, { inline: true }).inline_keyboard;
     expect(textAt(rows, 1, 0)).toBe('🖼 Grid');
     expect(textAt(rows, 1, 1)).not.toBe('📚 Album');
+    expect(textAt(rows, 1, 1)).not.toBe('⬇️ Download');
   });
 
   it('switches the text toggle label when text is hidden', () => {
@@ -192,11 +200,12 @@ describe('carousel keyboard', () => {
     );
   });
 
-  it('keeps a single media item minimal', () => {
+  it('keeps a single media item minimal but downloadable', () => {
     const rows = buildCarouselKeyboard(makePost({ media: [photo] }), 0).inline_keyboard;
-    expect(rows).toHaveLength(2);
-    expect(textAt(rows, 0, 0)).toBe('📝 Hide text');
-    expect(urlAt(rows, 1, 0)).toBe('https://x.com/user/status/1234567890');
+    expect(rows).toHaveLength(3);
+    expect(textAt(rows, 0, 0)).toBe('⬇️ Download');
+    expect(textAt(rows, 1, 0)).toBe('📝 Hide text');
+    expect(urlAt(rows, 2, 0)).toBe('https://x.com/user/status/1234567890');
   });
 });
 
@@ -211,6 +220,7 @@ describe('grid keyboard', () => {
     expect(textAt(rows, 0, 2)).toBe('3');
     expect(textAt(rows, 1, 0)).toBe('🎠 Carousel');
     expect(textAt(rows, 1, 1)).toBe('📚 Album');
+    expect(textAt(rows, 1, 2)).toBe('⬇️ Download');
     expect(textAt(rows, 2, 0)).toBe('📝 Hide text');
     expect(urlAt(rows, 3, 0)).toBe('https://x.com/user/status/1234567890');
   });

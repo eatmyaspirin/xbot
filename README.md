@@ -20,9 +20,22 @@ Every button edits the **same Telegram message**, so switching views does not sp
 | **Grid** | Shows a contact sheet of all photos at once. Numbered buttons jump straight to a specific item. |
 | **Carousel** | One photo/video at a time with `◀️` / `▶️` and a position counter. |
 | **Album** | Sends the media as native Telegram albums (up to 10 items), which users can swipe natively. |
+| **Download** | Sends the original file as a document; multiple files are packaged into a ZIP. |
 | **Hide text** | Toggles captions off for a clean, image-only view. The setting follows you when switching views. |
 
 Photo galleries open in **Grid** by default. Other posts (video-only or mixed media) open in **Carousel**, with the other views one tap away.
+
+## Downloads
+
+The **⬇️ Download** button sends media as documents, so photos keep their original quality and videos keep their original file:
+
+- One media item → the original file (`.jpg`, `.png`, `.mp4`, etc.).
+- Multiple items → a ZIP named `xbot-<post-id>.zip` containing numbered files such as `01-photo.jpg` and `02-video.mp4`.
+- The ZIP is built in a request-specific temporary directory, uploaded, and deleted immediately after the upload finishes. A startup sweep also removes any stale request directories left by a crash.
+- `MAX_DOWNLOAD_MB` (default `45`) caps the total uncompressed media included. If a gallery is too large, the bot includes what fits and tells you how many items were skipped.
+- Downloads are not available on inline messages because Telegram inline results have no chat ID to send a document to.
+
+Telegram's bot document limit is 50 MB. The default 45 MB cap leaves room for ZIP overhead.
 
 ## What embeds work
 
@@ -97,6 +110,7 @@ To reset access, stop the bot and delete `DATA_DIR/state.json`. The owner privat
 - Photos, videos and animated GIFs.
 - Quote posts fall back to the quoted post's media when the linked post has none.
 - Grid, carousel and native album views, switchable in place.
+- Original-quality downloads: single files or a ZIP for galleries, with automatic temp cleanup.
 - Image-only mode with a single **Hide text** toggle.
 - Captions with author, post text, view label and a link back to X.
 - Sensitive posts are sent with Telegram's spoiler flag (direct messages only; inline results do not support spoilers).
@@ -153,6 +167,7 @@ To reset access, stop the bot and delete `DATA_DIR/state.json`. The owner privat
 | `X_FALLBACK_API_BASE` | `https://api.vxtwitter.com` | Fallback provider. Set empty to disable. |
 | `MAX_PHOTO_MB` | `10` | Maximum photo upload size. Telegram's own limit is 10 MB. |
 | `MAX_VIDEO_MB` | `45` | Maximum video/animation upload size. Telegram's own limit is 50 MB. |
+| `MAX_DOWNLOAD_MB` | `45` | Maximum total media size for a single download/ZIP. |
 | `CACHE_TTL_MINUTES` | `30` | How long post JSON and media bytes stay cached. |
 | `MEDIA_CACHE_MB` | `64` | Byte budget for cached media, and the budget for one album send. |
 | `REQUEST_TIMEOUT_SECONDS` | `20` | Timeout for X API and CDN requests. |
@@ -168,7 +183,8 @@ To reset access, stop the bot and delete `DATA_DIR/state.json`. The owner privat
 4. The first view is sent as a single message with stateless inline buttons. Callback data is `xb:<mode>:<postId>:<index>:<text>` — no session store.
 5. Carousel and grid taps rehydrate the post from cache (or refetch it), download the requested media and call `editMessageMedia`. Inline messages are edited with public URLs, because Telegram does not allow uploading new files to inline messages.
 6. Album taps download up to 10 items and call `sendMediaGroup`. Oversized items are skipped to stay inside Telegram's limits.
-7. Post JSON, media bytes and grid images live in bounded in-memory caches. The only persistent state is the chat allowlist in `DATA_DIR/state.json`.
+7. Download taps write media to a request-specific temp directory, ZIP multiple files with `archiver`, send the result as a document, then delete the directory in a `finally` block.
+8. Post JSON, media bytes and grid images live in bounded in-memory caches. The only persistent state is the chat allowlist in `DATA_DIR/state.json`.
 
 Because callback data only contains the post ID, mode and index, the gallery keeps working even if the bot restarts — as long as X still serves the post.
 
@@ -189,6 +205,7 @@ src/
   services/
     access.ts           owner checks + allowlist API
     carousel.ts         send/edit views, send albums
+    download.ts         temp files, ZIP creation, cleanup
     media.ts            capped downloads + media cache
     cache.ts            TTL/LRU cache
     x/
@@ -199,6 +216,7 @@ src/
     stateStore.ts       atomic JSON persistence for allowed chats
   ui/
     carousel.ts         captions, keyboards, callback data, InputMedia
+    download.ts         download document caption
     inline.ts           inline result builder
   utils/
     xurl.ts             URL parsing and extraction
@@ -247,6 +265,8 @@ The image builds the TypeScript project in a first stage and runs only productio
 - Videos are sent as normal Telegram videos, not streamed inline.
 - Inline editing uses media URLs, so private or login-walled media will not load inline.
 - Inline queries cannot be tied to a whitelisted chat ID because Telegram does not expose it; inline mode is open to any user who knows the bot.
+- Downloads are capped at 45 MB by default; larger galleries are partially included, and anything that cannot be uploaded is skipped with a notice.
+- Downloads are unavailable on inline messages because there is no chat ID to send a document to.
 - Polls, link cards, external players and live broadcasts are not turned into Telegram media; only photos, videos and GIFs are uploaded.
 - Only status URLs are recognized. `t.co` short links are not resolved.
 - Telegram only allows editing messages for 48 hours. Tapping a very old gallery asks the user to resend the link.

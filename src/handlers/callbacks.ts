@@ -1,14 +1,20 @@
-import { GrammyError, type Bot, type Context } from 'grammy';
+import { GrammyError, InputFile, type Bot, type Context } from 'grammy';
 
 import { logger } from '../logger.js';
 import { editCarousel, editGrid, sendAlbum } from '../services/carousel.js';
+import {
+  buildDownloadPackage,
+  cleanupDownloadDir,
+} from '../services/download.js';
 import { getPost } from '../services/x/index.js';
+import { replyToMessage } from '../utils/telegram.js';
 import {
   LEGACY_NOOP_CALLBACK,
   NOOP_CALLBACK,
   parseCallbackData,
   type CallbackAction,
 } from '../ui/carousel.js';
+import { buildDownloadCaption } from '../ui/download.js';
 
 function isStaleMessageError(error: unknown): boolean {
   if (!(error instanceof GrammyError)) return false;
@@ -57,6 +63,73 @@ async function handleAlbum(ctx: Context, action: CallbackAction): Promise<void> 
   }
 }
 
+async function handleDownload(ctx: Context, action: CallbackAction): Promise<void> {
+  if (ctx.inlineMessageId !== undefined) {
+    await ctx
+      .answerCallbackQuery({
+        text: 'Downloads are only available in a direct chat.',
+        show_alert: true,
+      })
+      .catch(() => {});
+    return;
+  }
+
+  const chatId = ctx.chat?.id;
+  if (chatId === undefined) {
+    await ctx
+      .answerCallbackQuery({ text: 'Could not find this chat.', show_alert: true })
+      .catch(() => {});
+    return;
+  }
+
+  // Stop the button spinner before the download starts.
+  await ctx
+    .answerCallbackQuery({ text: 'Preparing download…' })
+    .catch(() => {});
+  await ctx.api.sendChatAction(chatId, 'upload_document').catch(() => {});
+
+  try {
+    const post = await getPost(action.postId);
+    if (post.media.length === 0) throw new Error('Post has no media');
+
+    const download = await buildDownloadPackage(post);
+    try {
+      await ctx.api.sendDocument(
+        chatId,
+        new InputFile(download.filePath, download.fileName),
+        {
+          caption: buildDownloadCaption(post, download),
+          parse_mode: 'HTML',
+          ...replyToMessage(ctx),
+        },
+      );
+    } finally {
+      await cleanupDownloadDir(download.dir).catch((error: unknown) => {
+        logger.warn('Could not clean download temp directory', {
+          dir: download.dir,
+          error,
+        });
+      });
+    }
+
+    if (download.fileCount < download.totalCount) {
+      await ctx
+        .reply(
+          `Download includes ${download.fileCount} of ${download.totalCount} media items (size limit).`,
+        )
+        .catch(() => {});
+    }
+  } catch (error) {
+    logger.warn('Could not prepare download', {
+      postId: action.postId,
+      error,
+    });
+    await ctx
+      .reply('Could not prepare the download. The media may be too large for Telegram.')
+      .catch(() => {});
+  }
+}
+
 export function registerCallbackHandler(bot: Bot): void {
   bot.callbackQuery(/^(?:xb|car):/, async (ctx) => {
     const data = ctx.callbackQuery.data;
@@ -76,6 +149,11 @@ export function registerCallbackHandler(bot: Bot): void {
 
     if (action.mode === 'album') {
       await handleAlbum(ctx, action);
+      return;
+    }
+
+    if (action.mode === 'download') {
+      await handleDownload(ctx, action);
       return;
     }
 

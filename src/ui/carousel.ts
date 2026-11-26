@@ -6,6 +6,7 @@ import type { Post } from '../types.js';
 import { escapeHtml, escapeHtmlAttribute } from '../utils/html.js';
 
 export type ViewMode = 'carousel' | 'grid' | 'album';
+export type CallbackMode = ViewMode | 'download';
 
 export const CALLBACK_PREFIX = 'xb';
 export const LEGACY_PREFIX = 'car';
@@ -16,14 +17,15 @@ const CAPTION_LIMIT = 1024;
 const MAX_GRID_BUTTONS = 20;
 const GRID_BUTTONS_PER_ROW = 5;
 
-const MODE_CHARS: Record<ViewMode, string> = {
+const MODE_CHARS: Record<CallbackMode, string> = {
   carousel: 'c',
   grid: 'g',
   album: 'a',
+  download: 'd',
 };
 
 export interface CallbackAction {
-  mode: ViewMode;
+  mode: CallbackMode;
   postId: string;
   index: number;
   showText: boolean;
@@ -44,15 +46,16 @@ export interface InputMediaOptions {
   showText?: boolean;
 }
 
-function modeFromChar(value: string | undefined): ViewMode | null {
+function modeFromChar(value: string | undefined): CallbackMode | null {
   if (value === 'c') return 'carousel';
   if (value === 'g') return 'grid';
   if (value === 'a') return 'album';
+  if (value === 'd') return 'download';
   return null;
 }
 
 export function buildCallbackData(
-  mode: ViewMode,
+  mode: CallbackMode,
   postId: string,
   index: number,
   showText = true,
@@ -174,8 +177,16 @@ export function buildCarouselKeyboard(
     }
     if (!inline) {
       keyboard.text('📚 Album', buildCallbackData('album', post.id, 0, showText));
+      keyboard.text(
+        '⬇️ Download',
+        buildCallbackData('download', post.id, 0, showText),
+      );
     }
     if (post.mosaicUrl || !inline) keyboard.row();
+  } else if (!inline) {
+    keyboard
+      .text('⬇️ Download', buildCallbackData('download', post.id, 0, showText))
+      .row();
   }
 
   keyboard
@@ -208,8 +219,14 @@ export function buildGridKeyboard(
   if (shown % GRID_BUTTONS_PER_ROW !== 0) keyboard.row();
 
   keyboard.text('🎠 Carousel', buildCallbackData('carousel', post.id, 0, showText));
-  if (!inline && total > 1) {
-    keyboard.text('📚 Album', buildCallbackData('album', post.id, 0, showText));
+  if (!inline) {
+    if (total > 1) {
+      keyboard.text('📚 Album', buildCallbackData('album', post.id, 0, showText));
+    }
+    keyboard.text(
+      '⬇️ Download',
+      buildCallbackData('download', post.id, 0, showText),
+    );
   }
   keyboard.row();
 

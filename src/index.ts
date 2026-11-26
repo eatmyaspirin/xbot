@@ -2,10 +2,19 @@ import { createBot } from './bot.js';
 import { config } from './config.js';
 import { logger, setLogLevel } from './logger.js';
 import { initAccess } from './services/access.js';
+import { cleanupStaleDownloads } from './services/download.js';
 
 async function main(): Promise<void> {
   setLogLevel(config.logLevel);
   await initAccess();
+
+  const removed = await cleanupStaleDownloads().catch((error: unknown) => {
+    logger.warn('Could not sweep stale download directories', { error });
+    return 0;
+  });
+  if (removed > 0) {
+    logger.info(`Removed ${removed} stale download director${removed === 1 ? 'y' : 'ies'}`);
+  }
 
   const bot = createBot(config.botToken);
   const me = await bot.api.getMe();

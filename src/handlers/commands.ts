@@ -11,6 +11,7 @@ function helpText(username: string, owner: boolean): string {
 • 🖼 Grid — every photo at once
 • 🎠 Carousel — one at a time
 • 📚 Album — native Telegram album
+• ⬇️ Download — original file, or ZIP for galleries
 • 📝 Hide text — image-only view`,
     `<b>Inline</b>
 Type <code>@${username} &lt;link&gt;</code> in any chat.`,
