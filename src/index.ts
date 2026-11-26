@@ -1,9 +1,11 @@
 import { createBot } from './bot.js';
 import { config } from './config.js';
 import { logger, setLogLevel } from './logger.js';
+import { initAccess } from './services/access.js';
 
 async function main(): Promise<void> {
   setLogLevel(config.logLevel);
+  await initAccess();
 
   const bot = createBot(config.botToken);
   const me = await bot.api.getMe();

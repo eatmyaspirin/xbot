@@ -50,17 +50,48 @@ Use the bot without leaving a chat:
 
 The inline result is inserted into the current chat with working `◀️` / `▶️`, grid, and hide-text buttons. Inline edits use the public media URLs, so the bot does not upload new files when you navigate.
 
-To enable inline mode:
+Telegram does not expose the **target chat ID** for inline queries, only the sender and the chat type. Inline results therefore cannot be filtered by the chat allowlist. Inline mode is available to anyone who knows the bot, and inline gallery buttons work for everyone. The allowlist applies to direct messages and owner commands. If you need to restrict inline usage, disable inline mode in BotFather.
+
+To enable inline mode in BotFather:
 
 1. Open [@BotFather](https://t.me/BotFather).
 2. Send `/setinline`, select your bot, and enter a placeholder such as `Paste an X link…`.
-3. Optionally send `/setinlinefeedback` if you want feedback settings.
-4. Restart or just use the bot — inline queries are now delivered.
+3. Restart or just use the bot — inline queries are now delivered.
 
 Albums are not available inside inline messages because Telegram inline results cannot create media groups. Grid and Carousel are fully supported.
 
+## Access control
+
+By default the bot only responds to direct messages in the owner's private chat and explicitly allowed chats. Inline queries are exempt because Telegram does not expose their target chat ID; see **Inline mode** above.
+
+The owner is configured with `OWNER_ID` — a numeric Telegram user ID. Only that user can change the allowlist. Owner commands:
+
+| Command | Purpose |
+| --- | --- |
+| `/allow` | Run inside a group to allow that group. |
+| `/allow <chat_id>` | Allow a specific chat by numeric ID. |
+| `/deny` | Run inside a group to remove that group. |
+| `/deny <chat_id>` | Remove a specific chat. |
+| `/allowed` | List the owner ID and every allowed chat. |
+| `/chatid` | Show the current chat ID, type, title and your user ID. |
+
+The owner's private chat is always allowed and cannot be removed. To allow a group:
+
+1. Add the bot to the group.
+2. As the owner, send `/allow` in that group (or use `/chatid` there and `/allow <id>` from private chat).
+3. The group can now use link detection and inline mode.
+
+The allowlist is stored in `state.json` under `DATA_DIR` (default `./data`), with `0600` permissions and atomic writes. When Telegram upgrades a group to a supergroup, the stored chat ID is migrated automatically.
+
+If a chat is removed with `/deny`, the bot silently ignores new messages there and answers any remaining gallery buttons with an authorization error. Unauthorized private chats receive a short "this bot is private" reply.
+
+To reset access, stop the bot and delete `DATA_DIR/state.json`. The owner private chat remains available.
+
 ## Features
 
+## Features
+
+- Private by default: owner-only access management with a persistent chat allowlist.
 - Handles `x.com`, `twitter.com`, `mobile.twitter.com`, `fxtwitter.com`, `vxtwitter.com`, `fixupx.com` and `fixvx.com` links.
 - Understands `/status/<id>`, `/photo/1`, `/video/1` and `/i/web/status/<id>` URLs (plus trailing punctuation from chat apps).
 - Photos, videos and animated GIFs.
@@ -91,7 +122,8 @@ Albums are not available inside inline messages because Telegram inline results 
    cp .env.example .env
    ```
 
-   Set `BOT_TOKEN` in `.env`.
+   Set `BOT_TOKEN` and `OWNER_ID` in `.env`. `OWNER_ID` is your numeric
+   Telegram user ID (get it from [@userinfobot](https://t.me/userinfobot)).
 
 4. Start the bot in development mode:
 
@@ -105,6 +137,9 @@ Albums are not available inside inline messages because Telegram inline results 
    https://x.com/SpaceX/status/2125649126398591003
    ```
 
+   Your private chat is allowed automatically. Use `/allow` in a group to
+   enable the bot there.
+
 6. For inline mode, enable it in BotFather with `/setinline` (see above).
 
 ## Environment variables
@@ -112,6 +147,8 @@ Albums are not available inside inline messages because Telegram inline results 
 | Variable | Default | Description |
 | --- | --- | --- |
 | `BOT_TOKEN` | — | **Required.** Telegram bot token from BotFather. |
+| `OWNER_ID` | — | **Required.** Numeric Telegram user ID allowed to manage the allowlist. |
+| `DATA_DIR` | `./data` | Writable directory for `state.json` (owner allowlist). |
 | `X_API_BASE` | `https://api.fxtwitter.com` | Primary post-metadata provider. |
 | `X_FALLBACK_API_BASE` | `https://api.vxtwitter.com` | Fallback provider. Set empty to disable. |
 | `MAX_PHOTO_MB` | `10` | Maximum photo upload size. Telegram's own limit is 10 MB. |
@@ -131,7 +168,7 @@ Albums are not available inside inline messages because Telegram inline results 
 4. The first view is sent as a single message with stateless inline buttons. Callback data is `xb:<mode>:<postId>:<index>:<text>` — no session store.
 5. Carousel and grid taps rehydrate the post from cache (or refetch it), download the requested media and call `editMessageMedia`. Inline messages are edited with public URLs, because Telegram does not allow uploading new files to inline messages.
 6. Album taps download up to 10 items and call `sendMediaGroup`. Oversized items are skipped to stay inside Telegram's limits.
-7. Post JSON, media bytes and grid images live in bounded in-memory caches. There is no database.
+7. Post JSON, media bytes and grid images live in bounded in-memory caches. The only persistent state is the chat allowlist in `DATA_DIR/state.json`.
 
 Because callback data only contains the post ID, mode and index, the gallery keeps working even if the bot restarts — as long as X still serves the post.
 
@@ -143,10 +180,14 @@ src/
   logger.ts             tiny leveled logger
   handlers/
     commands.ts         /start and /help
+    owner.ts            /allow, /deny, /allowed, /chatid
     links.ts            detect post links, choose grid/carousel
     callbacks.ts        view switching, navigation, albums
-    inline.ts           inline query results
+    inline.ts           inline query handling
+  middleware/
+    access.ts           chat allowlist enforcement
   services/
+    access.ts           owner checks + allowlist API
     carousel.ts         send/edit views, send albums
     media.ts            capped downloads + media cache
     cache.ts            TTL/LRU cache
@@ -154,13 +195,16 @@ src/
       client.ts         FxTwitter / VxTwitter providers
       normalize.ts      API payloads -> Post (including mosaic)
       index.ts          post cache + request deduplication
+  storage/
+    stateStore.ts       atomic JSON persistence for allowed chats
   ui/
     carousel.ts         captions, keyboards, callback data, InputMedia
+    inline.ts           inline result builder
   utils/
     xurl.ts             URL parsing and extraction
     html.ts             HTML escaping
-    telegram.ts         reply helpers
-tests/                  URL, normalization, carousel and cache tests
+    telegram.ts         reply helpers + chat ID parsing
+tests/                  URL, normalization, carousel, access and state tests
 ```
 
 ## Scripts
@@ -179,8 +223,9 @@ Telegram bots have **privacy mode** enabled by default: in groups they only rece
 
 1. Open [@BotFather](https://t.me/BotFather) → `/setprivacy` → select the bot → **Disable**.
 2. Remove and re-add the bot to the group (privacy changes apply after re-adding).
+3. As the owner, send `/allow` in the group. Until it is allowed, the bot will ignore messages there.
 
-In private chats no configuration is needed.
+In private chats, the owner's chat works immediately; other private chats need `/allow <user_id>`.
 
 ## Docker
 
@@ -190,7 +235,7 @@ docker compose up -d --build
 docker compose logs -f
 ```
 
-The image builds the TypeScript project in a first stage and runs only production dependencies in the final stage as the non-root `node` user.
+The image builds the TypeScript project in a first stage and runs only production dependencies in the final stage as the non-root `node` user. Compose mounts the `xbot-data` volume at `/app/data` so the allowlist survives container recreation.
 
 ## Limitations
 
@@ -201,6 +246,7 @@ The image builds the TypeScript project in a first stage and runs only productio
 - Inline results cannot create albums, and their photo URLs must be JPEG and at most 5 MB. The bot requests a suitable CDN variant for inline photos.
 - Videos are sent as normal Telegram videos, not streamed inline.
 - Inline editing uses media URLs, so private or login-walled media will not load inline.
+- Inline queries cannot be tied to a whitelisted chat ID because Telegram does not expose it; inline mode is open to any user who knows the bot.
 - Polls, link cards, external players and live broadcasts are not turned into Telegram media; only photos, videos and GIFs are uploaded.
 - Only status URLs are recognized. `t.co` short links are not resolved.
 - Telegram only allows editing messages for 48 hours. Tapping a very old gallery asks the user to resend the link.
