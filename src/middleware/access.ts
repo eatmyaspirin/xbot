@@ -45,6 +45,13 @@ function notApprovedMessage(userId: number | undefined): string {
   return 'Your account is not approved. Ask the owner to allow you with /allowuser.';
 }
 
+function notApprovedHtml(userId: number | undefined): string {
+  if (userId !== undefined) {
+    return `Your account is not approved. Your user ID is <code>${userId}</code>. Ask the owner to allow it with <code>/allowuser ${userId}</code>.`;
+  }
+  return 'Your account is not approved. Ask the owner to allow you with <code>/allowuser &lt;user_id&gt;</code>.';
+}
+
 export function registerAccessMiddleware(bot: Bot): void {
   bot.use(async (ctx, next) => {
     // Inline queries have no chat ID, so they are controlled by the user
@@ -140,10 +147,15 @@ export function registerAccessMiddleware(bot: Bot): void {
     }
 
     if (chat.type === 'private') {
-      const message = userAllowed
-        ? 'This chat is not authorized to use this bot.'
-        : notApprovedMessage(userId);
-      await ctx.reply(message).catch(() => {});
+      if (userAllowed) {
+        await ctx
+          .reply('This chat is not authorized to use this bot.')
+          .catch(() => {});
+      } else {
+        await ctx
+          .reply(notApprovedHtml(userId), { parse_mode: 'HTML' })
+          .catch(() => {});
+      }
     }
 
     logger.debug('Blocked update from unauthorized account or chat', {

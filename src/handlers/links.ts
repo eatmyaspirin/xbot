@@ -84,9 +84,10 @@ export function registerLinkHandler(bot: Bot): void {
       if (ctx.chat.type === 'private' && looksLikeXLink(text)) {
         await ctx
           .reply(
-            'I could not find a post link in that message. Send a link to a specific post, like https://x.com/user/status/123.',
+            'I could not find a post link in that message. Send a link to a specific post, like <code>https://x.com/user/status/123</code>.',
             {
               ...replyToMessage(ctx),
+              parse_mode: 'HTML',
               link_preview_options: { is_disabled: true },
             },
           )

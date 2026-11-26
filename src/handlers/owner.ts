@@ -12,6 +12,7 @@ import {
   removeAllowedUser,
 } from '../services/access.js';
 import type { AllowedUser } from '../storage/stateStore.js';
+import { escapeHtml } from '../utils/html.js';
 import { chatTitle, parseChatId, parseUserId } from '../utils/telegram.js';
 
 async function ownerOnly(ctx: Context): Promise<void> {
@@ -25,9 +26,9 @@ function formatUser(user: {
   username?: string;
   displayName?: string;
 }): string {
-  const name = user.displayName ? ` - ${user.displayName}` : '';
-  const handle = user.username ? ` (@${user.username})` : '';
-  return `${user.id}${name}${handle}`;
+  const name = user.displayName ? ` - ${escapeHtml(user.displayName)}` : '';
+  const handle = user.username ? ` (@${escapeHtml(user.username)})` : '';
+  return `<code>${user.id}</code>${name}${handle}`;
 }
 
 function userFromReply(ctx: Context): {
@@ -70,14 +71,16 @@ export function registerOwnerCommands(bot: Bot): void {
       const parsed = parseChatId(arg);
       if (parsed === null) {
         await ctx.reply(
-          'Send a numeric chat ID, for example /allow -1001234567890.',
+          'Send a numeric chat ID, for example <code>/allow -1001234567890</code>.',
+          { parse_mode: 'HTML' },
         );
         return;
       }
 
       if (parsed > 0) {
         await ctx.reply(
-          'Use /allowuser for private users. /allow is for group and channel chat IDs.',
+          'Use <code>/allowuser</code> for private users. <code>/allow</code> is for group and channel chat IDs.',
+          { parse_mode: 'HTML' },
         );
         return;
       }
@@ -100,7 +103,8 @@ export function registerOwnerCommands(bot: Bot): void {
       }
     } else if (chat.type === 'private') {
       await ctx.reply(
-        'Your private chat with me is always allowed. Use /allowuser to approve a user, or run /allow inside a group.',
+        'Your private chat with me is always allowed. Use <code>/allowuser</code> to approve a user, or run <code>/allow</code> inside a group.',
+        { parse_mode: 'HTML' },
       );
       return;
     }
@@ -117,7 +121,10 @@ export function registerOwnerCommands(bot: Bot): void {
     });
 
     await ctx.reply(
-      `Allowed chat ${entry.id}${entry.title ? ` - ${entry.title}` : ''}.`,
+      `Allowed chat <code>${entry.id}</code>${
+        entry.title ? ` - ${escapeHtml(entry.title)}` : ''
+      }.`,
+      { parse_mode: 'HTML' },
     );
   });
 
@@ -137,13 +144,17 @@ export function registerOwnerCommands(bot: Bot): void {
       const parsed = parseChatId(arg);
       if (parsed === null) {
         await ctx.reply(
-          'Send a numeric chat ID, for example /deny -1001234567890.',
+          'Send a numeric chat ID, for example <code>/deny -1001234567890</code>.',
+          { parse_mode: 'HTML' },
         );
         return;
       }
 
       if (parsed > 0) {
-        await ctx.reply('Use /denyuser to remove a private user.');
+        await ctx.reply(
+          'Use <code>/denyuser</code> to remove a private user.',
+          { parse_mode: 'HTML' },
+        );
         return;
       }
 
@@ -160,8 +171,9 @@ export function registerOwnerCommands(bot: Bot): void {
     const removed = await removeAllowedChat(targetId);
     await ctx.reply(
       removed
-        ? `Removed chat ${targetId}.`
-        : `Chat ${targetId} is not in the allowed list.`,
+        ? `Removed chat <code>${targetId}</code>.`
+        : `Chat <code>${targetId}</code> is not in the allowed list.`,
+      { parse_mode: 'HTML' },
     );
   });
 
@@ -182,7 +194,8 @@ export function registerOwnerCommands(bot: Bot): void {
       const parsed = parseUserId(arg);
       if (parsed === null) {
         await ctx.reply(
-          'Send a numeric user ID, for example /allowuser 123456789.',
+          'Send a numeric user ID, for example <code>/allowuser 123456789</code>.',
+          { parse_mode: 'HTML' },
         );
         return;
       }
@@ -215,7 +228,8 @@ export function registerOwnerCommands(bot: Bot): void {
       target = userFromReply(ctx);
       if (!target) {
         await ctx.reply(
-          'Reply to a user with /allowuser, or send /allowuser <user_id>.',
+          'Reply to a user with <code>/allowuser</code>, or send <code>/allowuser &lt;user_id&gt;</code>.',
+          { parse_mode: 'HTML' },
         );
         return;
       }
@@ -231,7 +245,9 @@ export function registerOwnerCommands(bot: Bot): void {
       ...(target.displayName ? { displayName: target.displayName } : {}),
     });
 
-    await ctx.reply(`Allowed user ${formatUser(entry)}.`);
+    await ctx.reply(`Allowed user ${formatUser(entry)}.`, {
+      parse_mode: 'HTML',
+    });
   });
 
   bot.command('denyuser', async (ctx) => {
@@ -247,7 +263,8 @@ export function registerOwnerCommands(bot: Bot): void {
       targetId = parseUserId(arg);
       if (targetId === null) {
         await ctx.reply(
-          'Send a numeric user ID, for example /denyuser 123456789.',
+          'Send a numeric user ID, for example <code>/denyuser 123456789</code>.',
+          { parse_mode: 'HTML' },
         );
         return;
       }
@@ -258,7 +275,8 @@ export function registerOwnerCommands(bot: Bot): void {
 
     if (targetId === null) {
       await ctx.reply(
-        'Reply to a user with /denyuser, or send /denyuser <user_id>.',
+        'Reply to a user with <code>/denyuser</code>, or send <code>/denyuser &lt;user_id&gt;</code>.',
+        { parse_mode: 'HTML' },
       );
       return;
     }
@@ -271,8 +289,9 @@ export function registerOwnerCommands(bot: Bot): void {
     const removed = await removeAllowedUser(targetId);
     await ctx.reply(
       removed
-        ? `Removed user ${targetId}.`
-        : `User ${targetId} is not in the allowed list.`,
+        ? `Removed user <code>${targetId}</code>.`
+        : `User <code>${targetId}</code> is not in the allowed list.`,
+      { parse_mode: 'HTML' },
     );
   });
 
@@ -284,7 +303,7 @@ export function registerOwnerCommands(bot: Bot): void {
 
     const chats = listAllowedChats();
     const lines = [
-      `Owner user ID: ${config.ownerId}`,
+      `Owner user ID: <code>${config.ownerId}</code>`,
       `Allowed chats: ${chats.length}`,
       '',
     ];
@@ -295,9 +314,9 @@ export function registerOwnerCommands(bot: Bot): void {
       const shown = chats.slice(0, 50);
       for (const chat of shown) {
         lines.push(
-          `• ${chat.id}${chat.title ? ` - ${chat.title}` : ''}${
-            chat.type ? ` (${chat.type})` : ''
-          }`,
+          `• <code>${chat.id}</code>${
+            chat.title ? ` - ${escapeHtml(chat.title)}` : ''
+          }${chat.type ? ` (${chat.type})` : ''}`,
         );
       }
       if (chats.length > shown.length) {
@@ -308,11 +327,11 @@ export function registerOwnerCommands(bot: Bot): void {
     lines.push(
       '',
       'Your private chat is always allowed.',
-      'Add a chat with /allow <chat_id> or run /allow inside a group.',
-      'Manage users with /allowedusers.',
+      'Add a chat with <code>/allow &lt;chat_id&gt;</code> or run <code>/allow</code> inside a group.',
+      'Manage users with <code>/allowedusers</code>.',
     );
 
-    await ctx.reply(lines.join('\n'));
+    await ctx.reply(lines.join('\n'), { parse_mode: 'HTML' });
   });
 
   bot.command('allowedusers', async (ctx) => {
@@ -323,7 +342,7 @@ export function registerOwnerCommands(bot: Bot): void {
 
     const users = listAllowedUsers();
     const lines = [
-      `Owner user ID: ${config.ownerId}`,
+      `Owner user ID: <code>${config.ownerId}</code>`,
       `Allowed users: ${users.length}`,
       '',
     ];
@@ -340,11 +359,11 @@ export function registerOwnerCommands(bot: Bot): void {
 
     lines.push(
       '',
-      'Add with /allowuser <user_id> or reply /allowuser to a user message.',
-      'Remove with /denyuser <user_id> or reply /denyuser.',
+      'Add with <code>/allowuser &lt;user_id&gt;</code> or reply <code>/allowuser</code> to a user message.',
+      'Remove with <code>/denyuser &lt;user_id&gt;</code> or reply <code>/denyuser</code>.',
     );
 
-    await ctx.reply(lines.join('\n'));
+    await ctx.reply(lines.join('\n'), { parse_mode: 'HTML' });
   });
 
   bot.command('chatid', async (ctx) => {
@@ -356,21 +375,32 @@ export function registerOwnerCommands(bot: Bot): void {
     const chat = ctx.chat;
     if (!chat) return;
 
-    const lines = [`Chat ID: ${chat.id}`, `Chat type: ${chat.type}`];
+    const lines = [
+      `Chat ID: <code>${chat.id}</code>`,
+      `Chat type: ${chat.type}`,
+    ];
     const title = chatTitle(chat);
-    if (title) lines.push(`Title: ${title}`);
-    lines.push(`Your user ID: ${ctx.from?.id ?? 'unknown'}`);
+    if (title) lines.push(`Title: ${escapeHtml(title)}`);
+    lines.push(
+      `Your user ID: ${
+        ctx.from?.id !== undefined
+          ? `<code>${ctx.from.id}</code>`
+          : 'unknown'
+      }`,
+    );
 
     const replied = ctx.message?.reply_to_message?.from;
     if (replied) {
       const name = [replied.first_name, replied.last_name]
         .filter(Boolean)
         .join(' ');
-      lines.push('', `Replied user ID: ${replied.id}`);
-      if (name) lines.push(`Replied user: ${name}`);
-      if (replied.username) lines.push(`Username: @${replied.username}`);
+      lines.push('', `Replied user ID: <code>${replied.id}</code>`);
+      if (name) lines.push(`Replied user: ${escapeHtml(name)}`);
+      if (replied.username) {
+        lines.push(`Username: @${escapeHtml(replied.username)}`);
+      }
     }
 
-    await ctx.reply(lines.join('\n'));
+    await ctx.reply(lines.join('\n'), { parse_mode: 'HTML' });
   });
 }
