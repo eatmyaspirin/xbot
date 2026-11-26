@@ -12,8 +12,16 @@ export interface AllowedChat {
   addedAt: string;
 }
 
+export interface AllowedUser {
+  id: number;
+  username?: string;
+  displayName?: string;
+  addedAt: string;
+}
+
 interface PersistedState {
   chats: AllowedChat[];
+  users: AllowedUser[];
 }
 
 function isChatId(value: unknown): value is number {
@@ -43,23 +51,57 @@ function sanitizeChat(value: unknown): AllowedChat | null {
   };
 }
 
+function sanitizeUser(value: unknown): AllowedUser | null {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as Record<string, unknown>;
+  if (
+    typeof record.id !== 'number' ||
+    !Number.isSafeInteger(record.id) ||
+    record.id <= 0
+  ) {
+    return null;
+  }
+
+  const username = cleanText(record.username, 64);
+  const displayName = cleanText(record.displayName, 200);
+  const addedAt = cleanText(record.addedAt, 40) ?? new Date().toISOString();
+
+  return {
+    id: record.id,
+    ...(username ? { username } : {}),
+    ...(displayName ? { displayName } : {}),
+    addedAt,
+  };
+}
+
 function sanitizeState(value: unknown): PersistedState {
-  if (!value || typeof value !== 'object') return { chats: [] };
+  if (!value || typeof value !== 'object') return { chats: [], users: [] };
 
   const record = value as Record<string, unknown>;
   const chats: AllowedChat[] = [];
-  const seen = new Set<number>();
+  const users: AllowedUser[] = [];
+  const seenChats = new Set<number>();
+  const seenUsers = new Set<number>();
 
   if (Array.isArray(record.chats)) {
     for (const item of record.chats) {
       const chat = sanitizeChat(item);
-      if (!chat || seen.has(chat.id)) continue;
-      seen.add(chat.id);
+      if (!chat || seenChats.has(chat.id)) continue;
+      seenChats.add(chat.id);
       chats.push(chat);
     }
   }
 
-  return { chats };
+  if (Array.isArray(record.users)) {
+    for (const item of record.users) {
+      const user = sanitizeUser(item);
+      if (!user || seenUsers.has(user.id)) continue;
+      seenUsers.add(user.id);
+      users.push(user);
+    }
+  }
+
+  return { chats, users };
 }
 
 /**
@@ -68,7 +110,7 @@ function sanitizeState(value: unknown): PersistedState {
  */
 export class StateStore {
   private readonly file: string;
-  private state: PersistedState = { chats: [] };
+  private state: PersistedState = { chats: [], users: [] };
   private writeChain: Promise<void> = Promise.resolve();
 
   constructor(private readonly dataDir: string) {
@@ -84,7 +126,7 @@ export class StateStore {
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
       if (code === 'ENOENT') {
-        this.state = { chats: [] };
+        this.state = { chats: [], users: [] };
         await this.persist();
         return;
       }
@@ -94,7 +136,7 @@ export class StateStore {
         error,
       });
       await rename(this.file, `${this.file}.corrupt-${Date.now()}`).catch(() => {});
-      this.state = { chats: [] };
+      this.state = { chats: [], users: [] };
       await this.persist();
     }
   }
@@ -105,6 +147,48 @@ export class StateStore {
 
   isChatAllowed(id: number): boolean {
     return this.state.chats.some((chat) => chat.id === id);
+  }
+
+  listUsers(): AllowedUser[] {
+    return this.state.users.map((user) => ({ ...user }));
+  }
+
+  isUserAllowed(id: number): boolean {
+    return this.state.users.some((user) => user.id === id);
+  }
+
+  async addUser(input: {
+    id: number;
+    username?: string;
+    displayName?: string;
+  }): Promise<AllowedUser> {
+    const existing = this.state.users.find((user) => user.id === input.id);
+
+    if (existing) {
+      if (input.username !== undefined) existing.username = input.username;
+      if (input.displayName !== undefined) existing.displayName = input.displayName;
+      await this.persist();
+      return { ...existing };
+    }
+
+    const entry: AllowedUser = {
+      id: input.id,
+      ...(input.username ? { username: input.username } : {}),
+      ...(input.displayName ? { displayName: input.displayName } : {}),
+      addedAt: new Date().toISOString(),
+    };
+    this.state.users.push(entry);
+    await this.persist();
+    return { ...entry };
+  }
+
+  async removeUser(id: number): Promise<boolean> {
+    const before = this.state.users.length;
+    this.state.users = this.state.users.filter((user) => user.id !== id);
+    if (this.state.users.length === before) return false;
+
+    await this.persist();
+    return true;
   }
 
   async addChat(input: {

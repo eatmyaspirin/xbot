@@ -5,6 +5,7 @@ import { logger } from '../logger.js';
 import {
   isChatAllowed,
   isOwner,
+  isUserAllowed,
   moveAllowedChat,
 } from '../services/access.js';
 import {
@@ -37,24 +38,57 @@ function toChat(chat: Chat): ChatInput {
   };
 }
 
+function notApprovedMessage(userId: number | undefined): string {
+  if (userId !== undefined) {
+    return `Your account is not approved. Your user ID is ${userId}. Ask the owner to allow it with /allowuser ${userId}.`;
+  }
+  return 'Your account is not approved. Ask the owner to allow you with /allowuser.';
+}
+
 export function registerAccessMiddleware(bot: Bot): void {
   bot.use(async (ctx, next) => {
-    // Telegram does not expose the target chat ID for inline queries, so the
-    // chat allowlist cannot be applied to inline results. Inline stays open;
-    // the allowlist applies to direct messages and commands.
+    // Inline queries have no chat ID, so they are controlled by the user
+    // allowlist instead.
     if (ctx.inlineQuery) {
-      if (ctx.from) {
-        touchUser(toUser(ctx.from));
-        recordInlineQuery(ctx.from.id);
+      const userId = ctx.from?.id;
+      if (
+        userId !== undefined &&
+        (isOwner(userId) || isUserAllowed(userId))
+      ) {
+        if (ctx.from) touchUser(toUser(ctx.from));
+        recordInlineQuery(userId);
+        await next();
+      } else {
+        await ctx
+          .answerInlineQuery([], {
+            cache_time: 0,
+            button: {
+              text: 'Account not approved',
+              start_parameter: 'access',
+            },
+          })
+          .catch(() => {});
       }
-      await next();
       return;
     }
 
     // Inline gallery buttons also have no chat ID.
     if (ctx.inlineMessageId) {
-      if (ctx.from) touchUser(toUser(ctx.from));
-      await next();
+      const userId = ctx.from?.id;
+      if (
+        userId !== undefined &&
+        (isOwner(userId) || isUserAllowed(userId))
+      ) {
+        if (ctx.from) touchUser(toUser(ctx.from));
+        await next();
+      } else {
+        await ctx
+          .answerCallbackQuery({
+            text: notApprovedMessage(userId),
+            show_alert: true,
+          })
+          .catch(() => {});
+      }
       return;
     }
 
@@ -65,44 +99,58 @@ export function registerAccessMiddleware(bot: Bot): void {
     }
 
     const userId = ctx.from?.id;
-    if (isOwner(userId) || isChatAllowed(chat.id)) {
-      // Keep an allowlisted group working after Telegram upgrades it to a
-      // supergroup and changes its chat ID.
-      const migratedTo = ctx.message?.migrate_to_chat_id;
-      if (migratedTo && isChatAllowed(chat.id)) {
-        await moveAllowedChat(chat.id, migratedTo).catch((error: unknown) => {
-          logger.warn('Could not migrate allowed chat ID', { error });
-        });
-      }
 
+    // Keep an allowlisted group working after Telegram upgrades it to a
+    // supergroup and changes its chat ID.
+    const migratedTo = ctx.message?.migrate_to_chat_id;
+    if (migratedTo && isChatAllowed(chat.id)) {
+      await moveAllowedChat(chat.id, migratedTo).catch((error: unknown) => {
+        logger.warn('Could not migrate allowed chat ID', { error });
+      });
+    }
+
+    // The owner bypasses both allowlists so they can manage any chat.
+    if (isOwner(userId)) {
       if (ctx.from) touchUser(toUser(ctx.from));
       touchChat(toChat(chat));
       if (ctx.message) recordMessage(userId, chat.id);
+      await next();
+      return;
+    }
 
+    const userAllowed = userId !== undefined && isUserAllowed(userId);
+    const chatAllowed = chat.type === 'private' || isChatAllowed(chat.id);
+
+    if (userAllowed && chatAllowed) {
+      if (ctx.from) touchUser(toUser(ctx.from));
+      touchChat(toChat(chat));
+      if (ctx.message) recordMessage(userId, chat.id);
       await next();
       return;
     }
 
     if (ctx.callbackQuery) {
+      const message = userAllowed
+        ? 'This chat is not authorized to use this bot.'
+        : notApprovedMessage(userId);
       await ctx
-        .answerCallbackQuery({
-          text: 'This chat is not authorized to use this bot.',
-          show_alert: true,
-        })
+        .answerCallbackQuery({ text: message, show_alert: true })
         .catch(() => {});
       return;
     }
 
     if (chat.type === 'private') {
-      await ctx
-        .reply(
-          'This bot is private. The owner has to allow this chat before it can be used.',
-        )
-        .catch(() => {});
+      const message = userAllowed
+        ? 'This chat is not authorized to use this bot.'
+        : notApprovedMessage(userId);
+      await ctx.reply(message).catch(() => {});
     }
 
-    logger.debug('Blocked update from unauthorized chat', {
+    logger.debug('Blocked update from unauthorized account or chat', {
       chatId: chat.id,
+      userId,
+      chatAllowed,
+      userAllowed,
       type: chat.type,
     });
   });

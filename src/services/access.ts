@@ -1,6 +1,10 @@
 import { config } from '../config.js';
 import { logger } from '../logger.js';
-import { StateStore, type AllowedChat } from '../storage/stateStore.js';
+import {
+  StateStore,
+  type AllowedChat,
+  type AllowedUser,
+} from '../storage/stateStore.js';
 
 let store: StateStore | undefined;
 
@@ -10,6 +14,7 @@ export async function initAccess(): Promise<void> {
   logger.info('Access control loaded', {
     ownerId: config.ownerId,
     allowedChats: store.listChats().length,
+    allowedUsers: store.listUsers().length,
     dataDir: config.dataDir,
   });
 }
@@ -25,6 +30,26 @@ export function isOwner(userId: number | undefined): boolean {
 
 export function isChatAllowed(chatId: number): boolean {
   return getStore().isChatAllowed(chatId);
+}
+
+export function isUserAllowed(userId: number): boolean {
+  return getStore().isUserAllowed(userId);
+}
+
+export function listAllowedUsers(): AllowedUser[] {
+  return getStore().listUsers();
+}
+
+export function addAllowedUser(input: {
+  id: number;
+  username?: string;
+  displayName?: string;
+}): Promise<AllowedUser> {
+  return getStore().addUser(input);
+}
+
+export function removeAllowedUser(id: number): Promise<boolean> {
+  return getStore().removeUser(id);
 }
 
 export function listAllowedChats(): AllowedChat[] {

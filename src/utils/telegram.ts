@@ -29,6 +29,12 @@ export function parseChatId(value: string): number | null {
   return id;
 }
 
+/** Accepts positive Telegram user IDs only. */
+export function parseUserId(value: string): number | null {
+  const id = parseChatId(value);
+  return id !== null && id > 0 ? id : null;
+}
+
 export function chatTitle(chat: Chat): string | undefined {
   if ('title' in chat && chat.title) return chat.title;
   if ('first_name' in chat) {

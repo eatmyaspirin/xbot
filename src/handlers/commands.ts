@@ -13,9 +13,9 @@ function helpText(username: string): string {
 • ⬇️ Download - original file, or ZIP for galleries
 • 📝 Hide text - image-only view`,
     `<b>Inline</b>
-Type <code>@${username} &lt;link&gt;</code> in any chat.`,
+Approved users can type <code>@${username} &lt;link&gt;</code> in any chat.`,
     `<b>Private bot</b>
-Link detection is limited to chats approved by the owner.`,
+Only approved users can use link detection. Groups also need approval.`,
     `<b>Good to know</b>
 • Only public posts can be loaded.
 • Telegram size limits apply (10 MB photos, 50 MB videos).

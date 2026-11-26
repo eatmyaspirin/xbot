@@ -64,7 +64,7 @@ Use the bot without leaving a chat:
 
 The inline result is inserted into the current chat with working `◀️` / `▶️`, grid, and hide-text buttons. Inline edits use the public media URLs, so the bot does not upload new files when you navigate.
 
-Telegram does not expose the **target chat ID** for inline queries, only the sender and the chat type. Inline results therefore cannot be filtered by the chat allowlist. Inline mode is available to anyone who knows the bot, and inline gallery buttons work for everyone. The allowlist applies to direct messages and owner commands. If you need to restrict inline usage, disable inline mode in BotFather.
+Telegram does not expose the **target chat ID** for inline queries, only the sender and the chat type. Inline results therefore cannot be filtered by the chat allowlist. Inline mode is controlled by the **user allowlist** instead: only the owner and approved users can use inline queries, and only they can operate inline gallery buttons. This lets approved users use inline mode in any chat without exposing it to everyone.
 
 To enable inline mode in BotFather:
 
@@ -76,32 +76,42 @@ Albums are not available inside inline messages because Telegram inline results 
 
 ## Access control
 
-By default the bot only responds to direct messages in the owner's private chat and explicitly allowed chats. Inline queries are exempt because Telegram does not expose their target chat ID; see **Inline mode** above.
+The bot uses two owner-managed allowlists: **chats** and **users**. The owner always bypasses both. Access rules:
 
-The owner is configured with `OWNER_ID` - a numeric Telegram user ID. Only that user can change the allowlist. Run `/admin` in the bot to print this reference:
+- **Private chat:** the user must be approved.
+- **Group or channel:** the user must be approved **and** the chat must be approved.
+- **Inline mode:** the user must be approved. Telegram does not expose a chat ID for inline queries.
+
+The owner is configured with `OWNER_ID` - a numeric Telegram user ID. Only that user can change the allowlists. Run `/admin` in the bot to print this reference:
 
 | Command | Purpose |
 | --- | --- |
 | `/admin` | Show the admin command reference. |
 | `/allow` | Run inside a group to allow that group. |
-| `/allow <chat_id>` | Allow a specific chat by numeric ID. |
+| `/allow <chat_id>` | Allow a group or channel by numeric ID. |
 | `/deny` | Run inside a group to remove that group. |
-| `/deny <chat_id>` | Remove a specific chat. |
-| `/allowed` | List the owner ID and every allowed chat. |
-| `/chatid` | Show the current chat ID, type, title and your user ID. |
+| `/deny <chat_id>` | Remove a group or channel. |
+| `/allowuser [user_id]` | Approve a user, or reply to their message with `/allowuser`. |
+| `/denyuser [user_id]` | Remove a user, or reply to their message with `/denyuser`. |
+| `/allowed` | List the owner ID and every approved chat. |
+| `/allowedusers` | List every approved user. |
+| `/chatid` | Show the current chat ID and the replied user's ID. |
 | `/stat` | Show usage statistics. `/stats` is an alias. |
 
-The owner's private chat is always allowed and cannot be removed. To allow a group:
+Typical setup:
 
-1. Add the bot to the group.
-2. As the owner, send `/allow` in that group (or use `/chatid` there and `/allow <id>` from private chat).
-3. The group can now use link detection and inline mode.
+1. The owner is always allowed.
+2. To approve a user, reply to one of their messages with `/allowuser`, or send `/allowuser <user_id>`.
+3. To approve a group, add the bot and send `/allow` in that group (or use `/chatid` there and `/allow <id>` from private chat).
+4. A user can use link detection in an approved group only after both the user and the group are approved.
 
-The allowlist is stored in `state.json` under `DATA_DIR` (default `./data`), with `0600` permissions and atomic writes. When Telegram upgrades a group to a supergroup, the stored chat ID is migrated automatically.
+Use `/chatid` as a reply to a user's message to get their numeric ID. You can also use [@userinfobot](https://t.me/userinfobot).
 
-If a chat is removed with `/deny`, the bot silently ignores new messages there and answers any remaining gallery buttons with an authorization error. Unauthorized private chats receive a short "this bot is private" reply.
+The allowlists are stored in `state.json` under `DATA_DIR` (default `./data`), with `0600` permissions and atomic writes. When Telegram upgrades a group to a supergroup, the stored chat ID is migrated automatically.
 
-To reset access, stop the bot and delete `DATA_DIR/state.json`. The owner private chat remains available.
+If a chat is removed with `/deny`, non-owner updates there are silently ignored. If a user is removed with `/denyuser`, their private messages and inline queries are rejected and their gallery buttons stop working. Unauthorized private users receive a short "account not approved" reply.
+
+To reset access, stop the bot and delete `DATA_DIR/state.json`. The owner remains available.
 
 ## Usage statistics
 
@@ -115,13 +125,13 @@ To reset access, stop the bot and delete `DATA_DIR/state.json`. The owner privat
 - the top groups by links processed
 - the database size and the date stats collection started
 
-Stats are stored in `DATA_DIR/stats.db` using Node's built-in `node:sqlite` in WAL mode. No external database service is needed. Usage is recorded only for updates that pass the access checks, so unauthorized chats do not inflate the numbers. Inline queries are counted even though they have no chat ID.
+Stats are stored in `DATA_DIR/stats.db` using Node's built-in `node:sqlite` in WAL mode. No external database service is needed. Usage is recorded only for updates that pass the access checks, so unauthorized users and chats do not inflate the numbers. Inline queries are counted for approved users even though they have no chat ID.
 
 To reset stats, stop the bot and delete `DATA_DIR/stats.db` (plus any `-wal`/`-shm` files).
 
 ## Features
 
-- Private by default: owner-only access management with a persistent chat allowlist.
+- Private by default: owner-only access management with persistent chat and user allowlists.
 - Owner-only usage statistics in SQLite, available with `/stat`.
 - Handles `x.com`, `twitter.com`, `mobile.twitter.com`, `fxtwitter.com`, `vxtwitter.com`, `fixupx.com` and `fixvx.com` links.
 - Understands `/status/<id>`, `/photo/1`, `/video/1` and `/i/web/status/<id>` URLs (plus trailing punctuation from chat apps).
@@ -169,8 +179,8 @@ To reset stats, stop the bot and delete `DATA_DIR/stats.db` (plus any `-wal`/`-s
    https://x.com/SpaceX/status/2125649126398591003
    ```
 
-   Your private chat is allowed automatically. Use `/allow` in a group to
-   enable the bot there.
+   The owner's private chat is allowed automatically. Approve other users
+   with `/allowuser` and groups with `/allow`.
 
 6. For inline mode, enable it in BotFather with `/setinline` (see above).
 
@@ -179,8 +189,8 @@ To reset stats, stop the bot and delete `DATA_DIR/stats.db` (plus any `-wal`/`-s
 | Variable | Default | Description |
 | --- | --- | --- |
 | `BOT_TOKEN` | - | **Required.** Telegram bot token from BotFather. |
-| `OWNER_ID` | - | **Required.** Numeric Telegram user ID allowed to manage the allowlist. |
-| `DATA_DIR` | `./data` | Writable directory for `state.json` (allowlist) and `stats.db` (usage counters). |
+| `OWNER_ID` | - | **Required.** Numeric Telegram user ID allowed to manage the allowlists. |
+| `DATA_DIR` | `./data` | Writable directory for `state.json` (chat and user allowlists) and `stats.db` (usage counters). |
 | `X_API_BASE` | `https://api.fxtwitter.com` | Primary post-metadata provider. |
 | `X_FALLBACK_API_BASE` | `https://api.vxtwitter.com` | Fallback provider. Set empty to disable. |
 | `MAX_PHOTO_MB` | `10` | Maximum photo upload size. Telegram's own limit is 10 MB. |
@@ -202,7 +212,7 @@ To reset stats, stop the bot and delete `DATA_DIR/stats.db` (plus any `-wal`/`-s
 5. Carousel and grid taps rehydrate the post from cache (or refetch it), download the requested media and call `editMessageMedia`. Inline messages are edited with public URLs, because Telegram does not allow uploading new files to inline messages.
 6. Album taps download up to 10 items and call `sendMediaGroup`. Oversized items are skipped to stay inside Telegram's limits.
 7. Download taps write media to a request-specific temp directory, ZIP multiple files with `fflate`, send the result as a document, then delete the directory in a `finally` block.
-8. Post JSON, media bytes and grid images live in bounded in-memory caches. Persistent state is the chat allowlist in `DATA_DIR/state.json` and usage counters in `DATA_DIR/stats.db`.
+8. Post JSON, media bytes and grid images live in bounded in-memory caches. Persistent state is the chat and user allowlists in `DATA_DIR/state.json` and usage counters in `DATA_DIR/stats.db`.
 9. The access middleware touches users/chats and records message and inline-query events. Links, downloads, albums and errors are recorded by their handlers. `/stat` aggregates the SQLite tables into a plain-text report.
 
 Because callback data only contains the post ID, mode and index, the gallery keeps working even if the bot restarts - as long as X still serves the post.
@@ -221,7 +231,7 @@ src/
     callbacks.ts        view switching, navigation, albums, downloads
     inline.ts           inline query handling
   middleware/
-    access.ts           chat allowlist enforcement + usage touch
+    access.ts           chat + user allowlist enforcement and usage touch
   services/
     access.ts           owner checks + allowlist API
     stats.ts            stats singleton + safe writes
@@ -265,8 +275,9 @@ Telegram bots have **privacy mode** enabled by default: in groups they only rece
 1. Open [@BotFather](https://t.me/BotFather) → `/setprivacy` → select the bot → **Disable**.
 2. Remove and re-add the bot to the group (privacy changes apply after re-adding).
 3. As the owner, send `/allow` in the group. Until it is allowed, the bot will ignore messages there.
+4. Approve the users who should be able to use the bot in that group with `/allowuser` (reply to their message or use their ID).
 
-In private chats, the owner's chat works immediately; other private chats need `/allow <user_id>`.
+In private chats, the owner's chat works immediately. Other users need `/allowuser <user_id>`, and group usage needs both an approved user and `/allow` for the group.
 
 ## Docker
 
@@ -276,7 +287,7 @@ docker compose up -d --build
 docker compose logs -f
 ```
 
-The image builds the TypeScript project in a first stage and runs only production dependencies in the final stage as the non-root `node` user. Compose mounts the `xbot-data` volume at `/app/data` so the allowlist and stats database survive container recreation.
+The image builds the TypeScript project in a first stage and runs only production dependencies in the final stage as the non-root `node` user. Compose mounts the `xbot-data` volume at `/app/data` so the allowlists and stats database survive container recreation.
 
 ## Limitations
 
@@ -287,10 +298,10 @@ The image builds the TypeScript project in a first stage and runs only productio
 - Inline results cannot create albums, and their photo URLs must be JPEG and at most 5 MB. The bot requests a suitable CDN variant for inline photos.
 - Videos are sent as normal Telegram videos, not streamed inline.
 - Inline editing uses media URLs, so private or login-walled media will not load inline.
-- Inline queries cannot be tied to a whitelisted chat ID because Telegram does not expose it; inline mode is open to any user who knows the bot.
+- Inline queries cannot be tied to a whitelisted chat ID because Telegram does not expose it; inline mode is controlled by the user allowlist instead.
 - Downloads are capped at 45 MB by default; larger galleries are partially included, and anything that cannot be uploaded is skipped with a notice.
 - Downloads are unavailable on inline messages because there is no chat ID to send a document to.
-- Usage stats are approximate and start when this feature was first deployed; they do not backfill older activity. Unauthorized chats are not counted.
+- Usage stats are approximate and start when this feature was first deployed; they do not backfill older activity. Unauthorized users and chats are not counted.
 - Polls, link cards, external players and live broadcasts are not turned into Telegram media; only photos, videos and GIFs are uploaded.
 - Only status URLs are recognized. `t.co` short links are not resolved.
 - Telegram only allows editing messages for 48 hours. Tapping a very old gallery asks the user to resend the link.

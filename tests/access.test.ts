@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseChatId } from '../src/utils/telegram.js';
+import { parseChatId, parseUserId } from '../src/utils/telegram.js';
 
 describe('parseChatId', () => {
   it.each([
@@ -23,4 +23,20 @@ describe('parseChatId', () => {
   ])('rejects %s', (input) => {
     expect(parseChatId(input)).toBeNull();
   });
+});
+
+describe('parseUserId', () => {
+  it.each([
+    ['791810678', 791810678],
+    [' 123456789 ', 123456789],
+  ])('parses %s', (input, expected) => {
+    expect(parseUserId(input)).toBe(expected);
+  });
+
+  it.each(['', '0', '-1001234567890', '@username', '1.5', 'abc'])(
+    'rejects %s',
+    (input) => {
+      expect(parseUserId(input)).toBeNull();
+    },
+  );
 });
