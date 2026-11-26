@@ -2,7 +2,7 @@ import type { Bot, Context } from 'grammy';
 
 import { config } from '../config.js';
 import { logger } from '../logger.js';
-import { sendCarousel } from '../services/carousel.js';
+import { sendCarousel, sendGrid } from '../services/carousel.js';
 import { MediaDownloadError, MediaTooLargeError } from '../services/media.js';
 import { getPost } from '../services/x/index.js';
 import { PostError } from '../services/x/normalize.js';
@@ -43,6 +43,20 @@ async function handleLink(ctx: Context, link: StatusLink): Promise<void> {
         replyToMessage(ctx),
       );
       return;
+    }
+
+    // Galleries open as a grid so every image is visible at once; other posts
+    // start in the carousel. Both views can be switched from the buttons.
+    if (post.mosaicUrl && post.media.length > 1) {
+      try {
+        await sendGrid(ctx, post);
+        return;
+      } catch (error) {
+        logger.warn('Grid view failed; falling back to carousel', {
+          postId: post.id,
+          error,
+        });
+      }
     }
 
     await sendCarousel(ctx, post, 0);

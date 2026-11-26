@@ -4,6 +4,7 @@ import { Bot } from 'grammy';
 import { logger } from './logger.js';
 import { registerCallbackHandler } from './handlers/callbacks.js';
 import { registerCommands } from './handlers/commands.js';
+import { registerInlineHandler } from './handlers/inline.js';
 import { registerLinkHandler } from './handlers/links.js';
 
 export function createBot(token: string): Bot {
@@ -19,6 +20,7 @@ export function createBot(token: string): Bot {
   registerCommands(bot);
   registerLinkHandler(bot);
   registerCallbackHandler(bot);
+  registerInlineHandler(bot);
 
   bot.catch((error) => {
     logger.error('Unhandled bot error', {

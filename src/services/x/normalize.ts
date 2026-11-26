@@ -51,7 +51,12 @@ export interface FxStatus {
     all?: FxMedia[];
     photos?: FxMedia[];
     videos?: FxMedia[];
-    mosaic?: FxMedia;
+    mosaic?: {
+      formats?: {
+        jpeg?: string;
+        webp?: string;
+      };
+    };
   };
 }
 
@@ -85,6 +90,7 @@ export interface VxResponse {
   possibly_sensitive?: boolean;
   media_extended?: VxMedia[];
   mediaURLs?: string[];
+  combinedMediaUrl?: string | null;
 }
 
 function isMp4(url: string): boolean {
@@ -199,6 +205,10 @@ export function normalizeFxStatus(status: FxStatus | undefined, fallbackId: stri
   const media = (status?.media?.all ?? [])
     .map(normalizeFxMedia)
     .filter((item): item is MediaItem => item !== null);
+  const mosaicUrl =
+    status?.media?.mosaic?.formats?.jpeg ??
+    status?.media?.mosaic?.formats?.webp ??
+    undefined;
 
   return {
     id,
@@ -209,6 +219,7 @@ export function normalizeFxStatus(status: FxStatus | undefined, fallbackId: stri
     createdAt: status?.created_at ?? null,
     sensitive: Boolean(status?.possibly_sensitive),
     media,
+    mosaicUrl,
   };
 }
 
@@ -281,5 +292,9 @@ export function normalizeVxStatus(raw: VxResponse, fallbackId: string): Post {
         : null,
     sensitive: Boolean(raw.possibly_sensitive),
     media,
+    mosaicUrl:
+      typeof raw.combinedMediaUrl === 'string' && raw.combinedMediaUrl
+        ? raw.combinedMediaUrl
+        : undefined,
   };
 }

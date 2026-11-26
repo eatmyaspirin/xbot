@@ -146,6 +146,11 @@ export async function downloadMedia(item: MediaItem): Promise<DownloadedMedia> {
   return task;
 }
 
+/** Downloads a single image (for example a provider-rendered mosaic). */
+export function downloadPhotoUrl(url: string): Promise<DownloadedMedia> {
+  return downloadMedia({ kind: 'photo', url, width: 0, height: 0 });
+}
+
 export function clearMediaCache(): void {
   mediaCache.clear();
 }

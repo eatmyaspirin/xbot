@@ -50,6 +50,12 @@ const fxGallery: FxStatus = {
         ],
       },
     ],
+    mosaic: {
+      formats: {
+        jpeg: 'https://mosaic.fxtwitter.com/jpeg/111/A/B',
+        webp: 'https://mosaic.fxtwitter.com/webp/111/A/B',
+      },
+    },
   },
 };
 
@@ -65,6 +71,7 @@ describe('normalizeFxStatus', () => {
     expect(post.url).toBe('https://x.com/SpaceX/status/111');
     expect(post.authorName).toBe('SpaceX');
     expect(post.sensitive).toBe(true);
+    expect(post.mosaicUrl).toBe('https://mosaic.fxtwitter.com/jpeg/111/A/B');
   });
 
   it('handles mosaic photos via their jpeg format', () => {
@@ -142,6 +149,21 @@ describe('normalizeVxStatus', () => {
     expect(post.media[2]?.width).toBe(0);
     expect(post.createdAt).toBe(new Date(1_700_000_000_000).toISOString());
     expect(post.url).toBe('https://x.com/SpaceX/status/222');
+  });
+
+  it('uses the combined image as a grid fallback', () => {
+    const post = normalizeVxStatus(
+      {
+        tweetID: '224',
+        combinedMediaUrl: 'https://vxtwitter.com/rendercombined.jpg?imgs=a,b',
+        media_extended: [
+          { type: 'image', url: 'https://pbs.twimg.com/media/A.jpg' },
+          { type: 'image', url: 'https://pbs.twimg.com/media/B.jpg' },
+        ],
+      },
+      '224',
+    );
+    expect(post.mosaicUrl).toBe('https://vxtwitter.com/rendercombined.jpg?imgs=a,b');
   });
 
   it('falls back to mediaURLs when media_extended is missing', () => {

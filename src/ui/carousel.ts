@@ -1,30 +1,97 @@
 import { InlineKeyboard, InputFile } from 'grammy';
 import type { InputMediaAnimation, InputMediaPhoto, InputMediaVideo } from 'grammy/types';
 
-import type { Post } from '../types.js';
 import type { DownloadedMedia } from '../services/media.js';
+import type { Post } from '../types.js';
 import { escapeHtml, escapeHtmlAttribute } from '../utils/html.js';
 
-export const CALLBACK_PREFIX = 'car';
+export type ViewMode = 'carousel' | 'grid' | 'album';
+
+export const CALLBACK_PREFIX = 'xb';
+export const LEGACY_PREFIX = 'car';
 export const NOOP_CALLBACK = `${CALLBACK_PREFIX}:noop`;
+export const LEGACY_NOOP_CALLBACK = `${LEGACY_PREFIX}:noop`;
 
 const CAPTION_LIMIT = 1024;
+const MAX_GRID_BUTTONS = 20;
+const GRID_BUTTONS_PER_ROW = 5;
 
-export function buildCallbackData(postId: string, index: number): string {
-  return `${CALLBACK_PREFIX}:${postId}:${index}`;
+const MODE_CHARS: Record<ViewMode, string> = {
+  carousel: 'c',
+  grid: 'g',
+  album: 'a',
+};
+
+export interface CallbackAction {
+  mode: ViewMode;
+  postId: string;
+  index: number;
+  showText: boolean;
 }
 
-export function parseCallbackData(data: string): { postId: string; index: number } | null {
-  const [prefix, postId, indexPart, ...rest] = data.split(':');
-  if (prefix !== CALLBACK_PREFIX || rest.length > 0) return null;
-  if (!postId || !/^\d{1,25}$/.test(postId)) return null;
-  if (indexPart === undefined || !/^\d{1,4}$/.test(indexPart)) return null;
-  return { postId, index: Number(indexPart) };
+export interface KeyboardOptions {
+  inline?: boolean;
+  showText?: boolean;
 }
 
-function buildFooter(url: string, index: number, total: number): string {
+export interface CaptionOptions {
+  view?: ViewMode;
+  showText?: boolean;
+}
+
+export interface InputMediaOptions {
+  file?: DownloadedMedia;
+  showText?: boolean;
+}
+
+function modeFromChar(value: string | undefined): ViewMode | null {
+  if (value === 'c') return 'carousel';
+  if (value === 'g') return 'grid';
+  if (value === 'a') return 'album';
+  return null;
+}
+
+export function buildCallbackData(
+  mode: ViewMode,
+  postId: string,
+  index: number,
+  showText = true,
+): string {
+  return `${CALLBACK_PREFIX}:${MODE_CHARS[mode]}:${postId}:${index}:${showText ? '1' : '0'}`;
+}
+
+export function parseCallbackData(data: string): CallbackAction | null {
+  const parts = data.split(':');
+
+  if (parts[0] === CALLBACK_PREFIX) {
+    if (parts.length !== 5) return null;
+    const mode = modeFromChar(parts[1]);
+    const postId = parts[2];
+    const indexPart = parts[3];
+    const textPart = parts[4];
+    if (!mode || !postId || !/^\d{1,25}$/.test(postId)) return null;
+    if (indexPart === undefined || !/^\d{1,4}$/.test(indexPart)) return null;
+    if (textPart !== '0' && textPart !== '1') return null;
+    return { mode, postId, index: Number(indexPart), showText: textPart === '1' };
+  }
+
+  // Buttons from the first release used "car:<postId>:<index>".
+  if (parts[0] === LEGACY_PREFIX) {
+    if (parts.length !== 3) return null;
+    const postId = parts[1];
+    const indexPart = parts[2];
+    if (!postId || !/^\d{1,25}$/.test(postId)) return null;
+    if (indexPart === undefined || !/^\d{1,4}$/.test(indexPart)) return null;
+    return { mode: 'carousel', postId, index: Number(indexPart), showText: true };
+  }
+
+  return null;
+}
+
+function buildFooter(url: string, index: number, total: number, view: ViewMode): string {
   const link = `<a href="${escapeHtmlAttribute(url)}">Open on X</a>`;
-  return total > 1 ? `${link} · ${index + 1}/${total}` : link;
+  if (view === 'carousel') return total > 1 ? `${link} · ${index + 1}/${total}` : link;
+  return `${link} · ${view === 'grid' ? '🖼 Grid' : '📚 Album'} (${total})`;
 }
 
 /** Escape first, then truncate on a raw-text boundary so entities are never split. */
@@ -44,13 +111,20 @@ function truncateEscaped(text: string, limit: number): string {
   return cut ? `${escapeHtml(cut)}…` : '';
 }
 
-export function buildCaption(post: Post, index: number, total = post.media.length): string {
+export function buildCaption(
+  post: Post,
+  index: number,
+  options: CaptionOptions = {},
+): string {
+  const { view = 'carousel', showText = true } = options;
+  if (!showText) return '';
+
   const author = escapeHtml(post.authorName.slice(0, 80));
   const handle = post.authorHandle
     ? ` (@${escapeHtml(post.authorHandle.slice(0, 20))})`
     : '';
   const header = `<b>${author}</b>${handle}`;
-  const footer = buildFooter(post.url, index, total);
+  const footer = buildFooter(post.url, index, post.media.length, view);
   const fixed = `${header}\n\n${footer}`;
   const budget = Math.max(0, CAPTION_LIMIT - fixed.length - 2);
   const body = truncateEscaped(post.text.trim(), budget);
@@ -58,7 +132,12 @@ export function buildCaption(post: Post, index: number, total = post.media.lengt
   return body ? `${header}\n\n${body}\n\n${footer}` : fixed;
 }
 
-export function buildKeyboard(post: Post, index: number): InlineKeyboard {
+export function buildCarouselKeyboard(
+  post: Post,
+  index: number,
+  options: KeyboardOptions = {},
+): InlineKeyboard {
+  const { inline = false, showText = true } = options;
   const keyboard = new InlineKeyboard();
   const total = post.media.length;
 
@@ -66,28 +145,102 @@ export function buildKeyboard(post: Post, index: number): InlineKeyboard {
     const previous = (index - 1 + total) % total;
     const next = (index + 1) % total;
     keyboard
-      .text('◀️', buildCallbackData(post.id, previous))
+      .text('◀️', buildCallbackData('carousel', post.id, previous, showText))
       .text(`${index + 1} / ${total}`, NOOP_CALLBACK)
-      .text('▶️', buildCallbackData(post.id, next))
+      .text('▶️', buildCallbackData('carousel', post.id, next, showText))
       .row();
   }
 
-  keyboard.url('Open on X', post.url);
+  if (total > 1) {
+    if (post.mosaicUrl) {
+      keyboard.text('🖼 Grid', buildCallbackData('grid', post.id, 0, showText));
+    }
+    if (!inline) {
+      keyboard.text('📚 Album', buildCallbackData('album', post.id, 0, showText));
+    }
+    if (post.mosaicUrl || !inline) keyboard.row();
+  }
+
+  keyboard
+    .text(
+      showText ? '📝 Hide text' : '📝 Show text',
+      buildCallbackData('carousel', post.id, index, !showText),
+    )
+    .row()
+    .url('Open on X', post.url);
+
   return keyboard;
 }
 
-export function toInputMedia(
+export function buildGridKeyboard(
+  post: Post,
+  options: KeyboardOptions = {},
+): InlineKeyboard {
+  const { inline = false, showText = true } = options;
+  const keyboard = new InlineKeyboard();
+  const total = post.media.length;
+  const shown = Math.min(total, MAX_GRID_BUTTONS);
+
+  for (let index = 0; index < shown; index += 1) {
+    keyboard.text(
+      String(index + 1),
+      buildCallbackData('carousel', post.id, index, showText),
+    );
+    if ((index + 1) % GRID_BUTTONS_PER_ROW === 0) keyboard.row();
+  }
+  if (shown % GRID_BUTTONS_PER_ROW !== 0) keyboard.row();
+
+  keyboard.text('🎠 Carousel', buildCallbackData('carousel', post.id, 0, showText));
+  if (!inline && total > 1) {
+    keyboard.text('📚 Album', buildCallbackData('album', post.id, 0, showText));
+  }
+  keyboard.row();
+
+  keyboard
+    .text(
+      showText ? '📝 Hide text' : '📝 Show text',
+      buildCallbackData('grid', post.id, 0, !showText),
+    )
+    .row()
+    .url('Open on X', post.url);
+
+  return keyboard;
+}
+
+/** Version of a photo URL that is safe for inline results (JPEG, <= 5 MB in practice). */
+export function inlinePhotoUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname === 'pbs.twimg.com') {
+      parsed.searchParams.set('name', 'large');
+      parsed.searchParams.set('format', 'jpg');
+    }
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
+function mediaSource(url: string, file?: DownloadedMedia): InputFile | string {
+  return file ? new InputFile(file.bytes, file.filename) : url;
+}
+
+export function toCarouselInputMedia(
   post: Post,
   index: number,
-  file: DownloadedMedia,
+  options: InputMediaOptions = {},
 ): InputMediaPhoto | InputMediaVideo | InputMediaAnimation {
   const item = post.media[index];
   if (!item) throw new RangeError(`No media at index ${index}`);
 
+  const caption = buildCaption(post, index, {
+    view: 'carousel',
+    showText: options.showText ?? true,
+  });
+
   const common = {
-    media: new InputFile(file.bytes, file.filename),
-    caption: buildCaption(post, index),
-    parse_mode: 'HTML' as const,
+    media: mediaSource(item.url, options.file),
+    ...(caption ? { caption, parse_mode: 'HTML' as const } : {}),
     ...(post.sensitive ? { has_spoiler: true } : {}),
   };
 
@@ -99,4 +252,53 @@ export function toInputMedia(
     default:
       return { type: 'video', ...common };
   }
+}
+
+export function toGridInputMedia(
+  post: Post,
+  options: InputMediaOptions = {},
+): InputMediaPhoto {
+  if (!post.mosaicUrl) throw new Error('Post has no grid image');
+
+  const caption = buildCaption(post, 0, {
+    view: 'grid',
+    showText: options.showText ?? true,
+  });
+
+  return {
+    type: 'photo',
+    media: mediaSource(post.mosaicUrl, options.file),
+    ...(caption ? { caption, parse_mode: 'HTML' as const } : {}),
+    ...(post.sensitive ? { has_spoiler: true } : {}),
+  };
+}
+
+/** Albums only accept photo/video; Twitter GIFs are MP4s, so they go in as videos. */
+export function toAlbumInputMedia(
+  post: Post,
+  index: number,
+  file: DownloadedMedia,
+  caption = '',
+): InputMediaPhoto | InputMediaVideo {
+  const item = post.media[index];
+  if (!item) throw new RangeError(`No media at index ${index}`);
+
+  const common = {
+    media: new InputFile(file.bytes, file.filename),
+    ...(caption ? { caption, parse_mode: 'HTML' as const } : {}),
+    ...(post.sensitive ? { has_spoiler: true } : {}),
+  };
+
+  if (item.kind === 'photo') {
+    return { type: 'photo', ...common };
+  }
+
+  return {
+    type: 'video',
+    ...common,
+    ...(item.width > 0 ? { width: item.width } : {}),
+    ...(item.height > 0 ? { height: item.height } : {}),
+    ...(item.duration ? { duration: Math.round(item.duration) } : {}),
+    supports_streaming: true,
+  };
 }

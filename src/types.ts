@@ -22,4 +22,6 @@ export interface Post {
   createdAt: string | null;
   sensitive: boolean;
   media: MediaItem[];
+  /** Contact-sheet image for photo galleries, when the provider supplies one. */
+  mosaicUrl?: string;
 }

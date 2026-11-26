@@ -9,6 +9,12 @@ async function main(): Promise<void> {
   const me = await bot.api.getMe();
   logger.info(`Logged in as @${me.username} (${me.id})`);
 
+  if (!me.supports_inline_queries) {
+    logger.warn(
+      'Inline mode is disabled. Enable it in BotFather with /setinline to use @bot <link> in any chat.',
+    );
+  }
+
   await bot.api
     .setMyCommands([
       { command: 'start', description: 'How to use xbot' },
@@ -30,7 +36,7 @@ async function main(): Promise<void> {
   process.once('SIGTERM', () => stop('SIGTERM'));
 
   await bot.start({
-    allowed_updates: ['message', 'callback_query'],
+    allowed_updates: ['message', 'callback_query', 'inline_query'],
     drop_pending_updates: config.dropPendingUpdates,
     onStart: (info) => {
       logger.info(`Listening for updates as @${info.username}`);
