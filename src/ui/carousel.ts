@@ -125,11 +125,28 @@ export function buildCaption(
     : '';
   const header = `<b>${author}</b>${handle}`;
   const footer = buildFooter(post.url, index, post.media.length, view);
+  const quoteLine = post.quoted
+    ? `<i>Quoting ${
+        post.quoted.authorHandle
+          ? `@${escapeHtml(post.quoted.authorHandle.slice(0, 20))}`
+          : escapeHtml(post.quoted.authorName.slice(0, 80))
+      }</i>`
+    : '';
+
   const fixed = `${header}\n\n${footer}`;
-  const budget = Math.max(0, CAPTION_LIMIT - fixed.length - 2);
-  const body = truncateEscaped(post.text.trim(), budget);
+  const budget = Math.max(
+    0,
+    CAPTION_LIMIT - fixed.length - 2 - (quoteLine ? quoteLine.length + 2 : 0),
+  );
+  const bodyText = truncateEscaped(post.text.trim(), budget);
+  const body = [bodyText, quoteLine].filter(Boolean).join('\n\n');
 
   return body ? `${header}\n\n${body}\n\n${footer}` : fixed;
+}
+
+function addLinkButtons(keyboard: InlineKeyboard, post: Post): void {
+  keyboard.url('Open on X', post.url);
+  if (post.quoted?.url) keyboard.url('Quoted post', post.quoted.url);
 }
 
 export function buildCarouselKeyboard(
@@ -166,9 +183,9 @@ export function buildCarouselKeyboard(
       showText ? '📝 Hide text' : '📝 Show text',
       buildCallbackData('carousel', post.id, index, !showText),
     )
-    .row()
-    .url('Open on X', post.url);
+    .row();
 
+  addLinkButtons(keyboard, post);
   return keyboard;
 }
 
@@ -201,9 +218,9 @@ export function buildGridKeyboard(
       showText ? '📝 Hide text' : '📝 Show text',
       buildCallbackData('grid', post.id, 0, !showText),
     )
-    .row()
-    .url('Open on X', post.url);
+    .row();
 
+  addLinkButtons(keyboard, post);
   return keyboard;
 }
 

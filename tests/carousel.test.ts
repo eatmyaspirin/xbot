@@ -99,6 +99,23 @@ describe('buildCaption', () => {
     expect(buildCaption(makePost(), 0, { showText: false })).toBe('');
   });
 
+  it('mentions the quoted author and links the source', () => {
+    const post = makePost({
+      quoted: {
+        authorName: 'Inner',
+        authorHandle: 'inner',
+        url: 'https://x.com/inner/status/555',
+        text: 'inner text',
+      },
+    });
+
+    expect(buildCaption(post, 0)).toContain('Quoting @inner');
+
+    const rows = buildCarouselKeyboard(post, 0).inline_keyboard;
+    expect(urlAt(rows, 3, 0)).toBe('https://x.com/user/status/1234567890');
+    expect(urlAt(rows, 3, 1)).toBe('https://x.com/inner/status/555');
+  });
+
   it('never exceeds Telegram’s caption limit', () => {
     const caption = buildCaption(makePost({ text: 'x'.repeat(10_000) }), 0);
     expect(caption.length).toBeLessThanOrEqual(1024);

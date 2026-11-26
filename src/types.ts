@@ -13,6 +13,13 @@ export interface MediaItem {
   alt?: string;
 }
 
+export interface QuotedPost {
+  authorName: string;
+  authorHandle: string | null;
+  url: string;
+  text: string;
+}
+
 export interface Post {
   id: string;
   url: string;
@@ -24,4 +31,6 @@ export interface Post {
   media: MediaItem[];
   /** Contact-sheet image for photo galleries, when the provider supplies one. */
   mosaicUrl?: string;
+  /** Set when the media comes from the quoted post rather than the linked post. */
+  quoted?: QuotedPost;
 }

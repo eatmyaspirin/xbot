@@ -24,6 +24,22 @@ Every button edits the **same Telegram message**, so switching views does not sp
 
 Photo galleries open in **Grid** by default. Other posts (video-only or mixed media) open in **Carousel**, with the other views one tap away.
 
+## What embeds work
+
+| Post type | What you get |
+| --- | --- |
+| **Photos** (single or gallery) | Grid, carousel, album, image-only mode, and inline results. |
+| **Videos** | Carousel, album (as a video item), and inline video results. Large files fall back to lower-quality variants. |
+| **Animated GIFs** | Carousel (as a Telegram animation), album (as a silent MP4 video), and inline MPEG-4 GIF results. |
+| **Quote posts** | If the linked post has no media of its own, the bot follows the quoted post and shows its media, with an extra **Quoted post** link. Outer media always wins. |
+| **Reposts / retweets** | The provider resolves them to the original post, so the media works normally. |
+| **Mixed photo + video** | X does not normally compose these in one post, but if the API returns both, carousel and album handle every item. Grid only appears when a photo mosaic exists. |
+| **Text-only posts / polls** | No media to show; the bot replies with a short explanation. Polls are not rendered. |
+| **Link cards / YouTube embeds** | Not downloaded or embedded. Use **Open on X** to view the card. |
+| **Live broadcasts** | Not supported; the stream URL cannot be uploaded as a normal Telegram video. |
+
+Sensitive posts are marked with a spoiler in direct chats. Inline results cannot carry Telegram spoilers.
+
 ## Inline mode
 
 Use the bot without leaving a chat:
@@ -48,6 +64,7 @@ Albums are not available inside inline messages because Telegram inline results 
 - Handles `x.com`, `twitter.com`, `mobile.twitter.com`, `fxtwitter.com`, `vxtwitter.com`, `fixupx.com` and `fixvx.com` links.
 - Understands `/status/<id>`, `/photo/1`, `/video/1` and `/i/web/status/<id>` URLs (plus trailing punctuation from chat apps).
 - Photos, videos and animated GIFs.
+- Quote posts fall back to the quoted post's media when the linked post has none.
 - Grid, carousel and native album views, switchable in place.
 - Image-only mode with a single **Hide text** toggle.
 - Captions with author, post text, view label and a link back to X.
@@ -110,7 +127,7 @@ Albums are not available inside inline messages because Telegram inline results 
 
 1. `handlers/links.ts` extracts status IDs from message text. It parses the URL path instead of relying on a fragile one-line regex.
 2. `services/x` fetches the post as JSON from FxTwitter (`/2/status/<id>`), falling back to VxTwitter (`/status/<id>`). Both are normalized into one `Post` shape.
-3. Photo galleries carry a provider-rendered mosaic (`mosaic.fxtwitter.com`), used as the grid image. Posts without one still get carousel and album views.
+3. Photo galleries carry a provider-rendered mosaic (`mosaic.fxtwitter.com`), used as the grid image. Posts without one still get carousel and album views. Quote posts with no media of their own follow the quoted post.
 4. The first view is sent as a single message with stateless inline buttons. Callback data is `xb:<mode>:<postId>:<index>:<text>` — no session store.
 5. Carousel and grid taps rehydrate the post from cache (or refetch it), download the requested media and call `editMessageMedia`. Inline messages are edited with public URLs, because Telegram does not allow uploading new files to inline messages.
 6. Album taps download up to 10 items and call `sendMediaGroup`. Oversized items are skipped to stay inside Telegram's limits.
@@ -184,6 +201,7 @@ The image builds the TypeScript project in a first stage and runs only productio
 - Inline results cannot create albums, and their photo URLs must be JPEG and at most 5 MB. The bot requests a suitable CDN variant for inline photos.
 - Videos are sent as normal Telegram videos, not streamed inline.
 - Inline editing uses media URLs, so private or login-walled media will not load inline.
+- Polls, link cards, external players and live broadcasts are not turned into Telegram media; only photos, videos and GIFs are uploaded.
 - Only status URLs are recognized. `t.co` short links are not resolved.
 - Telegram only allows editing messages for 48 hours. Tapping a very old gallery asks the user to resend the link.
 - Caches are per-process and in memory. Running multiple replicas is fine but each replica keeps its own cache; use Redis if you need shared state.

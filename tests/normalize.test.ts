@@ -108,6 +108,81 @@ describe('normalizeFxStatus', () => {
   it('rejects invalid ids', () => {
     expect(() => normalizeFxStatus({ id: 'abc' }, 'abc')).toThrow('invalid post id');
   });
+
+  it('follows a quote when the linked post has no media of its own', () => {
+    const post = normalizeFxStatus(
+      {
+        id: '666',
+        text: 'Look at this',
+        author: { name: 'Outer', screen_name: 'outer' },
+        media: { all: [] },
+        quote: {
+          id: '555',
+          text: 'inner text',
+          author: { name: 'Inner', screen_name: 'inner' },
+          media: {
+            all: [
+              {
+                type: 'photo',
+                url: 'https://pbs.twimg.com/media/Q.jpg',
+                width: 100,
+                height: 100,
+              },
+            ],
+            mosaic: {
+              formats: { jpeg: 'https://mosaic.fxtwitter.com/jpeg/555/Q' },
+            },
+          },
+        },
+      },
+      '666',
+    );
+
+    expect(post.media).toHaveLength(1);
+    expect(post.media[0]?.url).toBe('https://pbs.twimg.com/media/Q.jpg?name=orig');
+    expect(post.mosaicUrl).toBe('https://mosaic.fxtwitter.com/jpeg/555/Q');
+    expect(post.quoted).toEqual({
+      authorName: 'Inner',
+      authorHandle: 'inner',
+      url: 'https://x.com/inner/status/555',
+      text: 'inner text',
+    });
+  });
+
+  it('prefers the linked post media over quoted media', () => {
+    const post = normalizeFxStatus(
+      {
+        id: '777',
+        media: {
+          all: [
+            {
+              type: 'photo',
+              url: 'https://pbs.twimg.com/media/Outer.jpg',
+              width: 10,
+              height: 10,
+            },
+          ],
+        },
+        quote: {
+          id: '555',
+          media: {
+            all: [
+              {
+                type: 'photo',
+                url: 'https://pbs.twimg.com/media/Inner.jpg',
+                width: 10,
+                height: 10,
+              },
+            ],
+          },
+        },
+      },
+      '777',
+    );
+
+    expect(post.media[0]?.url).toContain('Outer.jpg');
+    expect(post.quoted).toBeUndefined();
+  });
 });
 
 describe('normalizeVxStatus', () => {

@@ -1,4 +1,4 @@
-import type { MediaItem, Post } from '../../types.js';
+import type { MediaItem, Post, QuotedPost } from '../../types.js';
 import { canonicalStatusUrl } from '../../utils/xurl.js';
 
 export type PostErrorCode = 'not_found' | 'protected' | 'upstream' | 'invalid';
@@ -58,6 +58,7 @@ export interface FxStatus {
       };
     };
   };
+  quote?: FxStatus | null;
 }
 
 export interface FxResponse {
@@ -195,6 +196,24 @@ function normalizeFxMedia(media: FxMedia): MediaItem | null {
   return null;
 }
 
+function toQuotedPost(status: FxStatus): QuotedPost | undefined {
+  const id = status.id?.trim();
+  const authorHandle = status.author?.screen_name?.trim() || null;
+  const url =
+    id && /^\d{1,25}$/.test(id)
+      ? canonicalStatusUrl(id, authorHandle)
+      : status.url?.trim();
+
+  if (!url) return undefined;
+
+  return {
+    authorName: status.author?.name?.trim() || authorHandle || 'Unknown',
+    authorHandle,
+    url,
+    text: (status.text ?? '').trim(),
+  };
+}
+
 export function normalizeFxStatus(status: FxStatus | undefined, fallbackId: string): Post {
   const id = (status?.id ?? fallbackId).trim();
   if (!/^\d{1,25}$/.test(id)) {
@@ -202,13 +221,30 @@ export function normalizeFxStatus(status: FxStatus | undefined, fallbackId: stri
   }
 
   const authorHandle = status?.author?.screen_name?.trim() || null;
-  const media = (status?.media?.all ?? [])
+  const ownMedia = (status?.media?.all ?? [])
     .map(normalizeFxMedia)
     .filter((item): item is MediaItem => item !== null);
-  const mosaicUrl =
+
+  // Quote posts often have no media of their own. Follow the quoted post so a
+  // link to a quote still opens a gallery instead of "no media".
+  const quotedStatus = status?.quote ?? null;
+  const quotedMedia = (quotedStatus?.media?.all ?? [])
+    .map(normalizeFxMedia)
+    .filter((item): item is MediaItem => item !== null);
+  const usingQuotedMedia = ownMedia.length === 0 && quotedMedia.length > 0;
+  const media = usingQuotedMedia ? quotedMedia : ownMedia;
+  const quoted =
+    usingQuotedMedia && quotedStatus ? toQuotedPost(quotedStatus) : undefined;
+
+  const ownMosaic =
     status?.media?.mosaic?.formats?.jpeg ??
     status?.media?.mosaic?.formats?.webp ??
     undefined;
+  const quotedMosaic =
+    quotedStatus?.media?.mosaic?.formats?.jpeg ??
+    quotedStatus?.media?.mosaic?.formats?.webp ??
+    undefined;
+  const mosaicUrl = usingQuotedMedia ? quotedMosaic : ownMosaic;
 
   return {
     id,
@@ -220,6 +256,7 @@ export function normalizeFxStatus(status: FxStatus | undefined, fallbackId: stri
     sensitive: Boolean(status?.possibly_sensitive),
     media,
     mosaicUrl,
+    quoted,
   };
 }
 
