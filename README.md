@@ -29,8 +29,9 @@ Photo galleries open in **Grid** by default. Other posts (video-only or mixed me
 
 The **⬇️ Download** button sends media as documents, so photos keep their original quality and videos keep their original file:
 
-- One media item → the original file (`.jpg`, `.png`, `.mp4`, etc.).
-- Multiple items → a ZIP named `xbot-<post-id>.zip` containing numbered files such as `01-photo.jpg` and `02-video.mp4`.
+- One media item → the original file, named from the author handle and post text, for example `spacex-teams-encapsulated-the-cygnus-xl.jpg`.
+- Multiple items → a ZIP named from the author and post text, for example `spacex-teams-encapsulated-the-cygnus-xl.zip`, containing files such as `spacex-teams-encapsulated-the-cygnus-xl-01-photo.jpg` and `spacex-teams-encapsulated-the-cygnus-xl-02-photo.jpg`.
+- Filenames are slugified and limited in length. URLs and emoji are removed. If the post has no usable text, the bot falls back to `x-post-<id>` or `<author>-post-<id>`.
 - The ZIP is built in a request-specific temporary directory, uploaded, and deleted immediately after the upload finishes. A startup sweep also removes any stale request directories left by a crash.
 - `MAX_DOWNLOAD_MB` (default `45`) caps the total uncompressed media included. If a gallery is too large, the bot includes what fits and tells you how many items were skipped.
 - Downloads are not available on inline messages because Telegram inline results have no chat ID to send a document to.

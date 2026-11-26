@@ -35,7 +35,13 @@ interface ZipEntry {
   path: string;
   name: string;
   size: number;
+  extension: string;
 }
+
+const MAX_BASE_LENGTH = 50;
+const MAX_HANDLE_LENGTH = 15;
+const MAX_TEXT_LENGTH = 38;
+const RESERVED_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
 
 export function defaultDownloadRoot(): string {
   return path.join(os.tmpdir(), DOWNLOAD_ROOT_NAME);
@@ -46,8 +52,50 @@ function extensionOf(filename: string): string {
   return /^\.[a-z0-9]{1,6}$/.test(ext) ? ext : '.bin';
 }
 
-function safeId(value: string): string {
-  return value.replace(/[^0-9A-Za-z_-]/g, '').slice(0, 40) || 'media';
+function slugify(value: string): string {
+  return value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/https?:\/\/\S+/gi, ' ')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function truncateSlug(value: string, maxLength: number): string {
+  const characters = Array.from(value);
+  if (characters.length <= maxLength) return value;
+
+  const cut = characters.slice(0, maxLength).join('');
+  const lastDash = cut.lastIndexOf('-');
+  const trimmed =
+    lastDash >= Math.floor(maxLength * 0.6) ? cut.slice(0, lastDash) : cut;
+
+  return trimmed.replace(/-+$/g, '');
+}
+
+/**
+ * Builds a readable filename from the author handle and post text, for
+ * example "spacex-teams-encapsulated-the-cygnus". URLs and emoji are removed.
+ */
+export function downloadBaseName(post: Post): string {
+  const handle = truncateSlug(slugify(post.authorHandle ?? ''), MAX_HANDLE_LENGTH);
+  const text = truncateSlug(slugify(post.text), MAX_TEXT_LENGTH);
+
+  let base = [handle, text].filter(Boolean).join('-');
+
+  if (!base) {
+    base = `x-post-${post.id}`;
+  } else if (!text || base.length < 3) {
+    base = `${base}-post-${post.id}`;
+  }
+
+  base = truncateSlug(base, MAX_BASE_LENGTH).replace(/-+$/g, '');
+  if (!base) base = `x-post-${post.id}`;
+  if (RESERVED_NAME.test(base)) base = `post-${base}`;
+
+  return base;
 }
 
 async function createZip(entries: ZipEntry[], zipPath: string): Promise<void> {
@@ -82,6 +130,7 @@ export async function buildDownloadPackage(
   const root = options.rootDir ?? defaultDownloadRoot();
   await mkdir(root, { recursive: true, mode: 0o700 });
   const dir = await mkdtemp(path.join(root, REQUEST_PREFIX));
+  const baseName = downloadBaseName(post);
 
   try {
     const entries: ZipEntry[] = [];
@@ -113,10 +162,16 @@ export async function buildDownloadPackage(
         continue;
       }
 
-      const name = `${String(index + 1).padStart(2, '0')}-${item.kind}${extensionOf(media.filename)}`;
+      const extension = extensionOf(media.filename);
+      const name = `${baseName}-${String(index + 1).padStart(2, '0')}-${item.kind}${extension}`;
       const filePath = path.join(dir, name);
       await writeFile(filePath, media.bytes, { mode: 0o600 });
-      entries.push({ path: filePath, name, size: media.bytes.byteLength });
+      entries.push({
+        path: filePath,
+        name,
+        size: media.bytes.byteLength,
+        extension,
+      });
       bytes += media.bytes.byteLength;
     }
 
@@ -125,7 +180,10 @@ export async function buildDownloadPackage(
       return {
         dir,
         filePath: single.path,
-        fileName: `xbot-${safeId(post.id)}-${single.name}`,
+        fileName:
+          post.media.length === 1
+            ? `${baseName}${single.extension}`
+            : single.name,
         fileCount: 1,
         totalCount: post.media.length,
         bytes: single.size,
@@ -137,7 +195,7 @@ export async function buildDownloadPackage(
       throw new Error('No media could be prepared for download');
     }
 
-    const zipPath = path.join(dir, `xbot-${safeId(post.id)}.zip`);
+    const zipPath = path.join(dir, `${baseName}.zip`);
     await createZip(entries, zipPath);
 
     const info = await stat(zipPath);
@@ -148,7 +206,7 @@ export async function buildDownloadPackage(
     return {
       dir,
       filePath: zipPath,
-      fileName: `xbot-${safeId(post.id)}.zip`,
+      fileName: `${baseName}.zip`,
       fileCount: entries.length,
       totalCount: post.media.length,
       bytes: info.size,

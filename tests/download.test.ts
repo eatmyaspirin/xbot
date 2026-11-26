@@ -18,6 +18,7 @@ import {
   buildDownloadPackage,
   cleanupDownloadDir,
   cleanupStaleDownloads,
+  downloadBaseName,
 } from '../src/services/download.js';
 import type { MediaItem, Post } from '../src/types.js';
 import { buildDownloadCaption } from '../src/ui/download.js';
@@ -73,11 +74,11 @@ describe('buildDownloadPackage', () => {
     const download = await buildDownloadPackage(post, { rootDir: root });
 
     expect(download.isZip).toBe(true);
-    expect(download.fileName).toBe('xbot-1234567890.zip');
+    expect(download.fileName).toBe('user-hello.zip');
     expect(download.fileCount).toBe(2);
     expect(download.totalCount).toBe(2);
     expect((await stat(download.filePath)).size).toBeGreaterThan(0);
-    expect(await readdir(download.dir)).toContain('xbot-1234567890.zip');
+    expect(await readdir(download.dir)).toContain('user-hello.zip');
 
     await cleanupDownloadDir(download.dir);
     expect(await readdir(root)).toEqual([]);
@@ -92,7 +93,7 @@ describe('buildDownloadPackage', () => {
     );
 
     expect(download.isZip).toBe(false);
-    expect(download.fileName).toBe('xbot-1234567890-01-photo.jpg');
+    expect(download.fileName).toBe('user-hello.jpg');
     expect(download.fileCount).toBe(1);
     expect(download.totalCount).toBe(1);
 
@@ -108,6 +109,7 @@ describe('buildDownloadPackage', () => {
     const download = await buildDownloadPackage(post, { rootDir: root });
 
     expect(download.isZip).toBe(false);
+    expect(download.fileName).toBe('user-hello-01-photo.jpg');
     expect(download.fileCount).toBe(1);
     expect(download.totalCount).toBe(2);
 
@@ -122,6 +124,42 @@ describe('buildDownloadPackage', () => {
     );
 
     expect(await readdir(root)).toEqual([]);
+  });
+});
+
+describe('downloadBaseName', () => {
+  it('uses the author handle and post text', () => {
+    expect(downloadBaseName(post)).toBe('user-hello');
+  });
+
+  it('strips URLs and emoji', () => {
+    expect(
+      downloadBaseName({
+        ...post,
+        text: '🚀 Launch https://example.com/abc now',
+      }),
+    ).toBe('user-launch-now');
+  });
+
+  it('falls back when there is no usable text', () => {
+    expect(downloadBaseName({ ...post, text: '🚀🚀' })).toBe(
+      'user-post-1234567890',
+    );
+    expect(
+      downloadBaseName({ ...post, authorHandle: null, text: '' }),
+    ).toBe('x-post-1234567890');
+  });
+
+  it('limits long names at a word boundary', () => {
+    const name = downloadBaseName({ ...post, text: 'word '.repeat(50) });
+    expect(name.length).toBeLessThanOrEqual(50);
+    expect(name.startsWith('user-word')).toBe(true);
+  });
+
+  it('avoids Windows reserved names', () => {
+    expect(downloadBaseName({ ...post, authorHandle: null, text: 'CON' })).toBe(
+      'post-con',
+    );
   });
 });
 
