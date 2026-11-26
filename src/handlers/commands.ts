@@ -15,7 +15,7 @@ function helpText(username: string, owner: boolean): string {
     `<b>Inline</b>
 Type <code>@${username} &lt;link&gt;</code> in any chat.`,
     `<b>Private bot</b>
-Only chats approved by the owner can use me.`,
+Link detection is limited to chats approved by the owner.`,
     `<b>Good to know</b>
 • Only public posts can be loaded.
 • Telegram size limits apply (10 MB photos, 50 MB videos).
