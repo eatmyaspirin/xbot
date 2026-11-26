@@ -3,10 +3,12 @@ import { config } from './config.js';
 import { logger, setLogLevel } from './logger.js';
 import { initAccess } from './services/access.js';
 import { cleanupStaleDownloads } from './services/download.js';
+import { closeStats, initStats } from './services/stats.js';
 
 async function main(): Promise<void> {
   setLogLevel(config.logLevel);
   await initAccess();
+  initStats();
 
   const removed = await cleanupStaleDownloads().catch((error: unknown) => {
     logger.warn('Could not sweep stale download directories', { error });
@@ -54,6 +56,7 @@ async function main(): Promise<void> {
     },
   });
 
+  closeStats();
   logger.info('Bot stopped');
 }
 

@@ -6,6 +6,7 @@ import {
   buildDownloadPackage,
   cleanupDownloadDir,
 } from '../services/download.js';
+import { recordAlbum, recordDownload, recordError } from '../services/stats.js';
 import { getPost } from '../services/x/index.js';
 import { replyToMessage } from '../utils/telegram.js';
 import {
@@ -44,6 +45,8 @@ async function handleAlbum(ctx: Context, action: CallbackAction): Promise<void> 
     if (post.media.length === 0) throw new Error('Post has no media');
 
     const result = await sendAlbum(ctx, post, action.showText);
+    recordAlbum(ctx.from?.id, ctx.chat?.id);
+
     if (result.skipped > 0) {
       await ctx
         .reply(
@@ -53,6 +56,7 @@ async function handleAlbum(ctx: Context, action: CallbackAction): Promise<void> 
         .catch(() => {});
     }
   } catch (error) {
+    recordError();
     logger.warn('Could not send album', {
       postId: action.postId,
       error,
@@ -112,6 +116,8 @@ async function handleDownload(ctx: Context, action: CallbackAction): Promise<voi
       });
     }
 
+    recordDownload(ctx.from?.id, ctx.chat?.id);
+
     if (download.fileCount < download.totalCount) {
       await ctx
         .reply(
@@ -120,6 +126,7 @@ async function handleDownload(ctx: Context, action: CallbackAction): Promise<voi
         .catch(() => {});
     }
   } catch (error) {
+    recordError();
     logger.warn('Could not prepare download', {
       postId: action.postId,
       error,

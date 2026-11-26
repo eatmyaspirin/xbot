@@ -1,7 +1,7 @@
-import { createWriteStream } from 'node:fs';
 import {
   mkdir,
   mkdtemp,
+  readFile,
   readdir,
   rm,
   stat,
@@ -10,7 +10,7 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 
-import { ZipArchive } from 'archiver';
+import { zip } from 'fflate';
 
 import { config } from '../config.js';
 import { logger } from '../logger.js';
@@ -51,23 +51,19 @@ function safeId(value: string): string {
 }
 
 async function createZip(entries: ZipEntry[], zipPath: string): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const output = createWriteStream(zipPath, { mode: 0o600 });
-    const archive = new ZipArchive({ zlib: { level: 1 } });
+  const files: Record<string, Uint8Array> = {};
+  for (const entry of entries) {
+    files[entry.name] = await readFile(entry.path);
+  }
 
-    output.on('close', () => resolve());
-    output.on('error', reject);
-    archive.on('warning', (error: NodeJS.ErrnoException) => {
-      if (error.code !== 'ENOENT') reject(error);
+  const archive = await new Promise<Uint8Array>((resolve, reject) => {
+    zip(files, { level: 1 }, (error, data) => {
+      if (error) reject(error);
+      else resolve(data);
     });
-    archive.on('error', reject);
-
-    archive.pipe(output);
-    for (const entry of entries) {
-      archive.file(entry.path, { name: entry.name });
-    }
-    void archive.finalize();
   });
+
+  await writeFile(zipPath, archive, { mode: 0o600 });
 }
 
 export async function cleanupDownloadDir(dir: string): Promise<void> {

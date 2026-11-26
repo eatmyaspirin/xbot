@@ -28,7 +28,8 @@ Link detection is limited to chats approved by the owner.`,
 <code>/allow [chat_id]</code> — allow this chat or a specific ID
 <code>/deny [chat_id]</code> — remove a chat
 <code>/allowed</code> — list approved chats
-<code>/chatid</code> — show this chat's ID`);
+<code>/chatid</code> — show this chat's ID
+<code>/stat</code> — usage statistics`);
   }
 
   return sections.join('\n\n');

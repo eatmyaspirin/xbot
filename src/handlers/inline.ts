@@ -1,6 +1,7 @@
 import type { Bot } from 'grammy';
 
 import { logger } from '../logger.js';
+import { recordError } from '../services/stats.js';
 import { getPost } from '../services/x/index.js';
 import { extractStatusLinks } from '../utils/xurl.js';
 import { buildInlineResult } from '../ui/inline.js';
@@ -49,6 +50,7 @@ export function registerInlineHandler(bot: Bot): void {
         is_personal: false,
       });
     } catch (error) {
+      recordError();
       logger.warn('Inline query failed', { postId: link.id, error });
       await ctx
         .answerInlineQuery([], {

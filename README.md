@@ -87,6 +87,7 @@ The owner is configured with `OWNER_ID` — a numeric Telegram user ID. Only tha
 | `/deny <chat_id>` | Remove a specific chat. |
 | `/allowed` | List the owner ID and every allowed chat. |
 | `/chatid` | Show the current chat ID, type, title and your user ID. |
+| `/stat` | Show usage statistics. `/stats` is an alias. |
 
 The owner's private chat is always allowed and cannot be removed. To allow a group:
 
@@ -100,11 +101,26 @@ If a chat is removed with `/deny`, the bot silently ignores new messages there a
 
 To reset access, stop the bot and delete `DATA_DIR/state.json`. The owner private chat remains available.
 
-## Features
+## Usage statistics
+
+`/stat` (owner-only; `/stats` is an alias) reports:
+
+- unique users
+- total chats, split into private chats, groups and channels
+- messages, links, downloads, albums, inline queries and errors
+- today's links, downloads and inline queries
+- a seven-day daily breakdown (UTC)
+- the top groups by links processed
+- the database size and the date stats collection started
+
+Stats are stored in `DATA_DIR/stats.db` using Node's built-in `node:sqlite` in WAL mode. No external database service is needed. Usage is recorded only for updates that pass the access checks, so unauthorized chats do not inflate the numbers. Inline queries are counted even though they have no chat ID.
+
+To reset stats, stop the bot and delete `DATA_DIR/stats.db` (plus any `-wal`/`-shm` files).
 
 ## Features
 
 - Private by default: owner-only access management with a persistent chat allowlist.
+- Owner-only usage statistics in SQLite, available with `/stat`.
 - Handles `x.com`, `twitter.com`, `mobile.twitter.com`, `fxtwitter.com`, `vxtwitter.com`, `fixupx.com` and `fixvx.com` links.
 - Understands `/status/<id>`, `/photo/1`, `/video/1` and `/i/web/status/<id>` URLs (plus trailing punctuation from chat apps).
 - Photos, videos and animated GIFs.
@@ -162,7 +178,7 @@ To reset access, stop the bot and delete `DATA_DIR/state.json`. The owner privat
 | --- | --- | --- |
 | `BOT_TOKEN` | — | **Required.** Telegram bot token from BotFather. |
 | `OWNER_ID` | — | **Required.** Numeric Telegram user ID allowed to manage the allowlist. |
-| `DATA_DIR` | `./data` | Writable directory for `state.json` (owner allowlist). |
+| `DATA_DIR` | `./data` | Writable directory for `state.json` (allowlist) and `stats.db` (usage counters). |
 | `X_API_BASE` | `https://api.fxtwitter.com` | Primary post-metadata provider. |
 | `X_FALLBACK_API_BASE` | `https://api.vxtwitter.com` | Fallback provider. Set empty to disable. |
 | `MAX_PHOTO_MB` | `10` | Maximum photo upload size. Telegram's own limit is 10 MB. |
@@ -183,8 +199,9 @@ To reset access, stop the bot and delete `DATA_DIR/state.json`. The owner privat
 4. The first view is sent as a single message with stateless inline buttons. Callback data is `xb:<mode>:<postId>:<index>:<text>` — no session store.
 5. Carousel and grid taps rehydrate the post from cache (or refetch it), download the requested media and call `editMessageMedia`. Inline messages are edited with public URLs, because Telegram does not allow uploading new files to inline messages.
 6. Album taps download up to 10 items and call `sendMediaGroup`. Oversized items are skipped to stay inside Telegram's limits.
-7. Download taps write media to a request-specific temp directory, ZIP multiple files with `archiver`, send the result as a document, then delete the directory in a `finally` block.
-8. Post JSON, media bytes and grid images live in bounded in-memory caches. The only persistent state is the chat allowlist in `DATA_DIR/state.json`.
+7. Download taps write media to a request-specific temp directory, ZIP multiple files with `fflate`, send the result as a document, then delete the directory in a `finally` block.
+8. Post JSON, media bytes and grid images live in bounded in-memory caches. Persistent state is the chat allowlist in `DATA_DIR/state.json` and usage counters in `DATA_DIR/stats.db`.
+9. The access middleware touches users/chats and records message and inline-query events. Links, downloads, albums and errors are recorded by their handlers. `/stat` aggregates the SQLite tables into a plain-text report.
 
 Because callback data only contains the post ID, mode and index, the gallery keeps working even if the bot restarts — as long as X still serves the post.
 
@@ -197,13 +214,15 @@ src/
   handlers/
     commands.ts         /start and /help
     owner.ts            /allow, /deny, /allowed, /chatid
+    stat.ts             owner-only /stat and /stats
     links.ts            detect post links, choose grid/carousel
-    callbacks.ts        view switching, navigation, albums
+    callbacks.ts        view switching, navigation, albums, downloads
     inline.ts           inline query handling
   middleware/
-    access.ts           chat allowlist enforcement
+    access.ts           chat allowlist enforcement + usage touch
   services/
     access.ts           owner checks + allowlist API
+    stats.ts            stats singleton + safe writes
     carousel.ts         send/edit views, send albums
     download.ts         temp files, ZIP creation, cleanup
     media.ts            capped downloads + media cache
@@ -214,10 +233,12 @@ src/
       index.ts          post cache + request deduplication
   storage/
     stateStore.ts       atomic JSON persistence for allowed chats
+    statsStore.ts       SQLite schema and usage aggregation
   ui/
     carousel.ts         captions, keyboards, callback data, InputMedia
     download.ts         download document caption
     inline.ts           inline result builder
+    stats.ts            stats report formatter
   utils/
     xurl.ts             URL parsing and extraction
     html.ts             HTML escaping
@@ -253,7 +274,7 @@ docker compose up -d --build
 docker compose logs -f
 ```
 
-The image builds the TypeScript project in a first stage and runs only production dependencies in the final stage as the non-root `node` user. Compose mounts the `xbot-data` volume at `/app/data` so the allowlist survives container recreation.
+The image builds the TypeScript project in a first stage and runs only production dependencies in the final stage as the non-root `node` user. Compose mounts the `xbot-data` volume at `/app/data` so the allowlist and stats database survive container recreation.
 
 ## Limitations
 
@@ -267,6 +288,7 @@ The image builds the TypeScript project in a first stage and runs only productio
 - Inline queries cannot be tied to a whitelisted chat ID because Telegram does not expose it; inline mode is open to any user who knows the bot.
 - Downloads are capped at 45 MB by default; larger galleries are partially included, and anything that cannot be uploaded is skipped with a notice.
 - Downloads are unavailable on inline messages because there is no chat ID to send a document to.
+- Usage stats are approximate and start when this feature was first deployed; they do not backfill older activity. Unauthorized chats are not counted.
 - Polls, link cards, external players and live broadcasts are not turned into Telegram media; only photos, videos and GIFs are uploaded.
 - Only status URLs are recognized. `t.co` short links are not resolved.
 - Telegram only allows editing messages for 48 hours. Tapping a very old gallery asks the user to resend the link.

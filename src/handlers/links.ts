@@ -4,6 +4,7 @@ import { config } from '../config.js';
 import { logger } from '../logger.js';
 import { sendCarousel, sendGrid } from '../services/carousel.js';
 import { MediaDownloadError, MediaTooLargeError } from '../services/media.js';
+import { recordError, recordLink } from '../services/stats.js';
 import { getPost } from '../services/x/index.js';
 import { PostError } from '../services/x/normalize.js';
 import { extractStatusLinks, looksLikeXLink, type StatusLink } from '../utils/xurl.js';
@@ -34,6 +35,8 @@ function describeError(error: unknown): string {
 }
 
 async function handleLink(ctx: Context, link: StatusLink): Promise<void> {
+  recordLink(ctx.from?.id, ctx.chat?.id);
+
   try {
     const post = await getPost(link.id);
 
@@ -61,6 +64,7 @@ async function handleLink(ctx: Context, link: StatusLink): Promise<void> {
 
     await sendCarousel(ctx, post, 0);
   } catch (error) {
+    recordError();
     logger.warn('Could not build carousel', {
       postId: link.id,
       error,
