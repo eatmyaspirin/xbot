@@ -77,19 +77,30 @@ export function buildInlineResult(post: Post): InlineQueryResult | null {
         ...base,
       };
 
-    case 'video':
+    case 'video': {
       if (!item.thumbnailUrl) return null;
+
+      // Telegram fetches inline media itself, and large X video URLs fail with
+      // "failed to get HTTP URL content". Use the smallest MP4 variant.
+      const variants = item.variants ?? [];
+      const videoUrl =
+        variants.length > 0 ? variants[variants.length - 1] ?? item.url : item.url;
+      const dimensions = /\/(\d{2,5})x(\d{2,5})\//.exec(videoUrl);
+      const width = dimensions?.[1] ? Number(dimensions[1]) : item.width;
+      const height = dimensions?.[2] ? Number(dimensions[2]) : item.height;
+
       return {
         type: 'video',
-        video_url: item.url,
+        video_url: videoUrl,
         mime_type: 'video/mp4',
         thumbnail_url: item.thumbnailUrl,
-        ...(item.width > 0 ? { video_width: item.width } : {}),
-        ...(item.height > 0 ? { video_height: item.height } : {}),
+        ...(width > 0 ? { video_width: width } : {}),
+        ...(height > 0 ? { video_height: height } : {}),
         ...(item.duration ? { video_duration: Math.round(item.duration) } : {}),
         title,
         description,
         ...base,
       };
+    }
   }
 }

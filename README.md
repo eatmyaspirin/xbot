@@ -43,7 +43,7 @@ Telegram's bot document limit is 50 MB. The default 45 MB cap leaves room for ZI
 | Post type | What you get |
 | --- | --- |
 | **Photos** (single or gallery) | Grid, carousel, album, image-only mode, and inline results. |
-| **Videos** | Carousel, album (as a video item), and inline video results. Large files fall back to lower-quality variants. |
+| **Videos** | Carousel, album (as a video item), and inline video results. Direct sends use the best variant under the upload cap; inline uses the smallest variant because Telegram fetches inline media itself. |
 | **Animated GIFs** | Carousel (as a Telegram animation), album (as a silent MP4 video), and inline MPEG-4 GIF results. |
 | **Quote posts** | If the linked post has no media of its own, the bot follows the quoted post and shows its media, with an extra **Quoted post** link. Outer media always wins. |
 | **Reposts / retweets** | The provider resolves them to the original post, so the media works normally. |
@@ -63,6 +63,8 @@ Use the bot without leaving a chat:
 ```
 
 The inline result is inserted into the current chat with working `◀️` / `▶️`, grid, and hide-text buttons. Inline edits use the public media URLs, so the bot does not upload new files when you navigate.
+
+For videos, inline results use the smallest available MP4 variant. Telegram fetches inline media from the URL itself, and large 1080p X video URLs can fail with `failed to get HTTP URL content`. Direct sends are unaffected and still use the best variant under the upload limit.
 
 Telegram does not expose the **target chat ID** for inline queries, only the sender and the chat type. Inline results therefore cannot be filtered by the chat allowlist. Inline mode is controlled by the **user allowlist** instead: only the owner and approved users can use inline queries, and only they can operate inline gallery buttons.
 

@@ -12,10 +12,15 @@ const photo: MediaItem = {
 
 const video: MediaItem = {
   kind: 'video',
-  url: 'https://video.twimg.com/v/720.mp4',
+  url: 'https://video.twimg.com/avc1/1920x1080/high.mp4',
+  variants: [
+    'https://video.twimg.com/avc1/1920x1080/high.mp4',
+    'https://video.twimg.com/avc1/1280x720/medium.mp4',
+    'https://video.twimg.com/avc1/480x270/low.mp4',
+  ],
   thumbnailUrl: 'https://pbs.twimg.com/media/thumb.jpg',
-  width: 1280,
-  height: 720,
+  width: 1920,
+  height: 1080,
   duration: 5,
 };
 
@@ -56,16 +61,33 @@ describe('buildInlineResult', () => {
     expect(result.reply_markup?.inline_keyboard.length).toBeGreaterThan(0);
   });
 
-  it('returns a video result with a thumbnail', () => {
+  it('returns a video result using the smallest variant Telegram can fetch', () => {
     const result = buildInlineResult(
       makePost({ media: [video], mosaicUrl: undefined }),
     );
     expect(result?.type).toBe('video');
     if (result?.type !== 'video' || !('video_url' in result)) return;
 
-    expect(result.video_url).toBe(video.url);
+    expect(result.video_url).toBe(
+      'https://video.twimg.com/avc1/480x270/low.mp4',
+    );
+    expect(result.video_width).toBe(480);
+    expect(result.video_height).toBe(270);
     expect(result.thumbnail_url).toBe(video.thumbnailUrl);
     expect(result.mime_type).toBe('video/mp4');
+  });
+
+  it('falls back to the primary video URL when no variants exist', () => {
+    const result = buildInlineResult(
+      makePost({
+        media: [{ ...video, variants: undefined }],
+        mosaicUrl: undefined,
+      }),
+    );
+    expect(result?.type).toBe('video');
+    if (result?.type !== 'video' || !('video_url' in result)) return;
+
+    expect(result.video_url).toBe(video.url);
   });
 
   it('returns an MPEG-4 GIF result for an animated GIF', () => {
