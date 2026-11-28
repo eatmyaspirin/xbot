@@ -73,6 +73,32 @@ describe('StateStore', () => {
     });
   });
 
+  it('defaults inline user gating to on and persists changes', async () => {
+    const dir = await makeDir();
+    const store = new StateStore(dir);
+    await store.init();
+
+    expect(store.inlineUserGate).toBe(true);
+    await store.setInlineUserGate(false);
+    expect(store.inlineUserGate).toBe(false);
+
+    const reloaded = new StateStore(dir);
+    await reloaded.init();
+    expect(reloaded.inlineUserGate).toBe(false);
+  });
+
+  it('defaults inline gating to on for older state files', async () => {
+    const dir = await makeDir();
+    await writeFile(
+      path.join(dir, 'state.json'),
+      JSON.stringify({ chats: [], users: [] }),
+    );
+
+    const store = new StateStore(dir);
+    await store.init();
+    expect(store.inlineUserGate).toBe(true);
+  });
+
   it('updates duplicate users and removes them', async () => {
     const dir = await makeDir();
     const store = new StateStore(dir);

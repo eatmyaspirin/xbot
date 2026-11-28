@@ -11,10 +11,12 @@ const ADMIN_TEXT = `<b>Admin commands</b>
 <code>/denyuser [user_id]</code> - remove a user
 <code>/allowed</code> - list approved chats
 <code>/allowedusers</code> - list approved users
+<code>/inlinewhitelist [on|off]</code> - require approved users for inline
+<code>/logs [lines]</code> - recent logs (private chat)
 <code>/chatid</code> - show this chat's ID and replied user IDs
 <code>/stat</code> - usage statistics
 
-Private chats need an approved user. Groups need an approved user and an approved chat. Inline needs an approved user.`;
+Private chats need an approved user. Groups need an approved user and an approved chat. Inline needs an approved user unless the inline whitelist is off.`;
 
 async function sendAdmin(ctx: Context): Promise<void> {
   if (!isOwner(ctx.from?.id)) {

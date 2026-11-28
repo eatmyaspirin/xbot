@@ -7,6 +7,7 @@ import { registerCallbackHandler } from './handlers/callbacks.js';
 import { registerCommands } from './handlers/commands.js';
 import { registerInlineHandler } from './handlers/inline.js';
 import { registerLinkHandler } from './handlers/links.js';
+import { registerLogsCommand } from './handlers/logs.js';
 import { registerOwnerCommands } from './handlers/owner.js';
 import { registerStatsCommand } from './handlers/stat.js';
 import { registerAccessMiddleware } from './middleware/access.js';
@@ -26,6 +27,7 @@ export function createBot(token: string): Bot {
   registerAdminCommand(bot);
   registerOwnerCommands(bot);
   registerStatsCommand(bot);
+  registerLogsCommand(bot);
   registerLinkHandler(bot);
   registerCallbackHandler(bot);
   registerInlineHandler(bot);

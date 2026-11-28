@@ -15,6 +15,7 @@ export async function initAccess(): Promise<void> {
     ownerId: config.ownerId,
     allowedChats: store.listChats().length,
     allowedUsers: store.listUsers().length,
+    inlineUserGate: store.inlineUserGate,
     dataDir: config.dataDir,
   });
 }
@@ -34,6 +35,14 @@ export function isChatAllowed(chatId: number): boolean {
 
 export function isUserAllowed(userId: number): boolean {
   return getStore().isUserAllowed(userId);
+}
+
+export function isInlineUserGateEnabled(): boolean {
+  return getStore().inlineUserGate;
+}
+
+export function setInlineUserGate(enabled: boolean): Promise<void> {
+  return getStore().setInlineUserGate(enabled);
 }
 
 export function listAllowedUsers(): AllowedUser[] {

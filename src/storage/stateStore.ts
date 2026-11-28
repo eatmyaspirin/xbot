@@ -19,9 +19,22 @@ export interface AllowedUser {
   addedAt: string;
 }
 
+export interface BotSettings {
+  inlineUserGate: boolean;
+}
+
 interface PersistedState {
   chats: AllowedChat[];
   users: AllowedUser[];
+  settings: BotSettings;
+}
+
+function defaultState(): PersistedState {
+  return {
+    chats: [],
+    users: [],
+    settings: { inlineUserGate: true },
+  };
 }
 
 function isChatId(value: unknown): value is number {
@@ -74,8 +87,19 @@ function sanitizeUser(value: unknown): AllowedUser | null {
   };
 }
 
+function sanitizeSettings(value: unknown): BotSettings {
+  if (!value || typeof value !== 'object') return { inlineUserGate: true };
+  const record = value as Record<string, unknown>;
+  return {
+    inlineUserGate:
+      typeof record.inlineUserGate === 'boolean'
+        ? record.inlineUserGate
+        : true,
+  };
+}
+
 function sanitizeState(value: unknown): PersistedState {
-  if (!value || typeof value !== 'object') return { chats: [], users: [] };
+  if (!value || typeof value !== 'object') return defaultState();
 
   const record = value as Record<string, unknown>;
   const chats: AllowedChat[] = [];
@@ -101,7 +125,7 @@ function sanitizeState(value: unknown): PersistedState {
     }
   }
 
-  return { chats, users };
+  return { chats, users, settings: sanitizeSettings(record.settings) };
 }
 
 /**
@@ -110,7 +134,7 @@ function sanitizeState(value: unknown): PersistedState {
  */
 export class StateStore {
   private readonly file: string;
-  private state: PersistedState = { chats: [], users: [] };
+  private state: PersistedState = defaultState();
   private writeChain: Promise<void> = Promise.resolve();
 
   constructor(private readonly dataDir: string) {
@@ -126,7 +150,7 @@ export class StateStore {
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
       if (code === 'ENOENT') {
-        this.state = { chats: [], users: [] };
+        this.state = defaultState();
         await this.persist();
         return;
       }
@@ -136,7 +160,7 @@ export class StateStore {
         error,
       });
       await rename(this.file, `${this.file}.corrupt-${Date.now()}`).catch(() => {});
-      this.state = { chats: [], users: [] };
+      this.state = defaultState();
       await this.persist();
     }
   }
@@ -155,6 +179,15 @@ export class StateStore {
 
   isUserAllowed(id: number): boolean {
     return this.state.users.some((user) => user.id === id);
+  }
+
+  get inlineUserGate(): boolean {
+    return this.state.settings.inlineUserGate;
+  }
+
+  async setInlineUserGate(enabled: boolean): Promise<void> {
+    this.state.settings.inlineUserGate = enabled;
+    await this.persist();
   }
 
   async addUser(input: {

@@ -4,8 +4,26 @@ export type LogLevel = keyof typeof LEVELS;
 
 let minimumLevel: LogLevel = 'info';
 
+const LOG_BUFFER_LIMIT = 1000;
+const recentLines: string[] = [];
+
 export function setLogLevel(level: LogLevel): void {
   minimumLevel = level;
+}
+
+/** Most recent emitted log lines, oldest first. Resets when the process restarts. */
+export function getRecentLogs(limit = 200): string[] {
+  const count = Math.max(1, Math.min(Math.floor(limit), LOG_BUFFER_LIMIT));
+  return recentLines.slice(-count);
+}
+
+export function getLogBufferLimit(): number {
+  return LOG_BUFFER_LIMIT;
+}
+
+function remember(line: string): void {
+  recentLines.push(line);
+  if (recentLines.length > LOG_BUFFER_LIMIT) recentLines.shift();
 }
 
 export interface Logger {
@@ -38,6 +56,7 @@ export function createLogger(scope = 'xbot'): Logger {
     if (LEVELS[level] < LEVELS[minimumLevel]) return;
     const line = `${new Date().toISOString()} ${level.toUpperCase().padEnd(5)} [${scope}] ${message}`;
     const output = extra === undefined ? line : `${line} ${serialize(extra)}`;
+    remember(output);
     if (level === 'error') process.stderr.write(`${output}\n`);
     else process.stdout.write(`${output}\n`);
   };

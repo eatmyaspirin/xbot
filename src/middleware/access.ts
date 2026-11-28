@@ -4,6 +4,7 @@ import type { Chat, User } from 'grammy/types';
 import { logger } from '../logger.js';
 import {
   isChatAllowed,
+  isInlineUserGateEnabled,
   isOwner,
   isUserAllowed,
   moveAllowedChat,
@@ -56,14 +57,20 @@ export function registerAccessMiddleware(bot: Bot): void {
   bot.use(async (ctx, next) => {
     // Inline queries have no chat ID, so they are controlled by the user
     // allowlist instead.
+    const inlineGate = isInlineUserGateEnabled();
+
     if (ctx.inlineQuery) {
       const userId = ctx.from?.id;
-      if (
-        userId !== undefined &&
-        (isOwner(userId) || isUserAllowed(userId))
-      ) {
-        if (ctx.from) touchUser(toUser(ctx.from));
-        recordInlineQuery(userId);
+      const allowed =
+        !inlineGate ||
+        (userId !== undefined &&
+          (isOwner(userId) || isUserAllowed(userId)));
+
+      if (allowed) {
+        if (ctx.from && userId !== undefined) {
+          touchUser(toUser(ctx.from));
+          recordInlineQuery(userId);
+        }
         await next();
       } else {
         await ctx
@@ -82,10 +89,12 @@ export function registerAccessMiddleware(bot: Bot): void {
     // Inline gallery buttons also have no chat ID.
     if (ctx.inlineMessageId) {
       const userId = ctx.from?.id;
-      if (
-        userId !== undefined &&
-        (isOwner(userId) || isUserAllowed(userId))
-      ) {
+      const allowed =
+        !inlineGate ||
+        (userId !== undefined &&
+          (isOwner(userId) || isUserAllowed(userId)));
+
+      if (allowed) {
         if (ctx.from) touchUser(toUser(ctx.from));
         await next();
       } else {

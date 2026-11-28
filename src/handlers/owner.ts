@@ -5,11 +5,13 @@ import { logger } from '../logger.js';
 import {
   addAllowedChat,
   addAllowedUser,
+  isInlineUserGateEnabled,
   isOwner,
   listAllowedChats,
   listAllowedUsers,
   removeAllowedChat,
   removeAllowedUser,
+  setInlineUserGate,
 } from '../services/access.js';
 import type { AllowedUser } from '../storage/stateStore.js';
 import { escapeHtml } from '../utils/html.js';
@@ -364,6 +366,49 @@ export function registerOwnerCommands(bot: Bot): void {
     );
 
     await ctx.reply(lines.join('\n'), { parse_mode: 'HTML' });
+  });
+
+  bot.command('inlinewhitelist', async (ctx) => {
+    if (!isOwner(ctx.from?.id)) {
+      await ownerOnly(ctx);
+      return;
+    }
+
+    const arg = ctx.match.trim().toLowerCase();
+    if (!arg) {
+      const enabled = isInlineUserGateEnabled();
+      await ctx.reply(
+        `Inline user whitelist: <b>${enabled ? 'ON' : 'OFF'}</b>\n\n${
+          enabled
+            ? 'Only approved users can use inline mode.'
+            : 'Anyone can use inline mode.'
+        }\n\nToggle with <code>/inlinewhitelist on</code> or <code>/inlinewhitelist off</code>.`,
+        { parse_mode: 'HTML' },
+      );
+      return;
+    }
+
+    let enabled: boolean | null = null;
+    if (['on', 'enable', 'true', '1'].includes(arg)) enabled = true;
+    else if (['off', 'disable', 'false', '0'].includes(arg)) enabled = false;
+
+    if (enabled === null) {
+      await ctx.reply(
+        'Use <code>/inlinewhitelist on</code> or <code>/inlinewhitelist off</code>.',
+        { parse_mode: 'HTML' },
+      );
+      return;
+    }
+
+    await setInlineUserGate(enabled);
+    await ctx.reply(
+      `Inline user whitelist is now <b>${enabled ? 'ON' : 'OFF'}</b>. ${
+        enabled
+          ? 'Only approved users can use inline mode.'
+          : 'Anyone can use inline mode.'
+      }`,
+      { parse_mode: 'HTML' },
+    );
   });
 
   bot.command('chatid', async (ctx) => {

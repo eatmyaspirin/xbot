@@ -64,7 +64,16 @@ Use the bot without leaving a chat:
 
 The inline result is inserted into the current chat with working `◀️` / `▶️`, grid, and hide-text buttons. Inline edits use the public media URLs, so the bot does not upload new files when you navigate.
 
-Telegram does not expose the **target chat ID** for inline queries, only the sender and the chat type. Inline results therefore cannot be filtered by the chat allowlist. Inline mode is controlled by the **user allowlist** instead: only the owner and approved users can use inline queries, and only they can operate inline gallery buttons. This lets approved users use inline mode in any chat without exposing it to everyone.
+Telegram does not expose the **target chat ID** for inline queries, only the sender and the chat type. Inline results therefore cannot be filtered by the chat allowlist. Inline mode is controlled by the **user allowlist** instead: only the owner and approved users can use inline queries, and only they can operate inline gallery buttons.
+
+The owner can toggle this requirement globally:
+
+```text
+/inlinewhitelist on
+/inlinewhitelist off
+```
+
+With `on`, inline requires an approved user. With `off`, anyone can use inline mode. Direct messages remain gated by the chat and user allowlists regardless of this setting.
 
 To enable inline mode in BotFather:
 
@@ -80,7 +89,7 @@ The bot uses two owner-managed allowlists: **chats** and **users**. The owner al
 
 - **Private chat:** the user must be approved.
 - **Group or channel:** the user must be approved **and** the chat must be approved.
-- **Inline mode:** the user must be approved. Telegram does not expose a chat ID for inline queries.
+- **Inline mode:** the user must be approved unless the inline user whitelist is disabled. Telegram does not expose a chat ID for inline queries.
 
 The owner is configured with `OWNER_ID` - a numeric Telegram user ID. Only that user can change the allowlists. Run `/admin` in the bot to print this reference:
 
@@ -95,6 +104,8 @@ The owner is configured with `OWNER_ID` - a numeric Telegram user ID. Only that 
 | `/denyuser [user_id]` | Remove a user, or reply to their message with `/denyuser`. |
 | `/allowed` | List the owner ID and every approved chat. |
 | `/allowedusers` | List every approved user. |
+| `/inlinewhitelist [on\|off]` | Enable or disable the user allowlist for inline mode. |
+| `/logs [lines]` | Send recent in-memory logs to the owner (private chat only). |
 | `/chatid` | Show the current chat ID and the replied user's ID. |
 | `/stat` | Show usage statistics. `/stats` is an alias. |
 
@@ -132,6 +143,8 @@ To reset stats, stop the bot and delete `DATA_DIR/stats.db` (plus any `-wal`/`-s
 ## Features
 
 - Private by default: owner-only access management with persistent chat and user allowlists.
+- Owner-only inline user-whitelist toggle with `/inlinewhitelist`.
+- Owner-only `/logs` for recent in-memory logs.
 - Owner-only usage statistics in SQLite, available with `/stat`.
 - Handles `x.com`, `twitter.com`, `mobile.twitter.com`, `fxtwitter.com`, `vxtwitter.com`, `fixupx.com` and `fixvx.com` links.
 - Understands `/status/<id>`, `/photo/1`, `/video/1` and `/i/web/status/<id>` URLs (plus trailing punctuation from chat apps).
@@ -225,8 +238,9 @@ src/
   logger.ts             tiny leveled logger
   handlers/
     commands.ts         /start and /help
-    owner.ts            /allow, /deny, /allowed, /chatid
+    owner.ts            /allow, /deny, /allowuser, /inlinewhitelist, /chatid
     stat.ts             owner-only /stat and /stats
+    logs.ts             owner-only /logs document
     links.ts            detect post links, choose grid/carousel
     callbacks.ts        view switching, navigation, albums, downloads
     inline.ts           inline query handling
@@ -279,6 +293,32 @@ Telegram bots have **privacy mode** enabled by default: in groups they only rece
 
 In private chats, the owner's chat works immediately. Other users need `/allowuser <user_id>`, and group usage needs both an approved user and `/allow` for the group.
 
+## Troubleshooting
+
+Recent in-process logs are available to the owner:
+
+```text
+/logs
+/logs 500
+```
+
+The command sends a text file with the last 200 lines by default, up to 1000. It only works in a private chat with the bot. The buffer resets on restart; persistent systemd logs are available with:
+
+```bash
+sudo journalctl -u xbot -f
+```
+
+Quick upstream checks from the server:
+
+```bash
+curl -I https://api.fxtwitter.com/2/status/2125649126398591003
+curl -I https://api.vxtwitter.com/status/2125649126398591003
+curl -I https://pbs.twimg.com/media/HX_Rle0XUAAVZ7a.jpg?name=orig
+curl -I https://api.telegram.org
+```
+
+Provider failures are logged as `Provider fxtwitter failed` or `Provider vxtwitter failed` and will appear in `/logs` or the journal.
+
 ## Docker
 
 ```bash
@@ -298,7 +338,8 @@ The image builds the TypeScript project in a first stage and runs only productio
 - Inline results cannot create albums, and their photo URLs must be JPEG and at most 5 MB. The bot requests a suitable CDN variant for inline photos.
 - Videos are sent as normal Telegram videos, not streamed inline.
 - Inline editing uses media URLs, so private or login-walled media will not load inline.
-- Inline queries cannot be tied to a whitelisted chat ID because Telegram does not expose it; inline mode is controlled by the user allowlist instead.
+- Inline queries cannot be tied to a whitelisted chat ID because Telegram does not expose it; inline mode is controlled by the user allowlist or `/inlinewhitelist off`.
+- `/logs` keeps only the latest 1000 emitted lines in memory. The buffer resets when the bot restarts; use `journalctl -u xbot` for persistent history.
 - Downloads are capped at 45 MB by default; larger galleries are partially included, and anything that cannot be uploaded is skipped with a notice.
 - Downloads are unavailable on inline messages because there is no chat ID to send a document to.
 - Usage stats are approximate and start when this feature was first deployed; they do not backfill older activity. Unauthorized users and chats are not counted.
