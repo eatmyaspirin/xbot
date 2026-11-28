@@ -43,7 +43,7 @@ Telegram's bot document limit is 50 MB. The default 45 MB cap leaves room for ZI
 | Post type | What you get |
 | --- | --- |
 | **Photos** (single or gallery) | Grid, carousel, album, image-only mode, and inline results. |
-| **Videos** | Carousel, album (as a video item), and inline video results. Direct sends use the best variant under the upload cap; inline uses the smallest variant because Telegram fetches inline media itself. |
+| **Videos** | Carousel, album (as a video item), and inline video results. Direct sends use the best variant under the upload cap; inline probes variant sizes and uses the highest-quality MP4 under 19 MB. |
 | **Animated GIFs** | Carousel (as a Telegram animation), album (as a silent MP4 video), and inline MPEG-4 GIF results. |
 | **Quote posts** | If the linked post has no media of its own, the bot follows the quoted post and shows its media, with an extra **Quoted post** link. Outer media always wins. |
 | **Reposts / retweets** | The provider resolves them to the original post, so the media works normally. |
@@ -64,7 +64,7 @@ Use the bot without leaving a chat:
 
 The inline result is inserted into the current chat with working `◀️` / `▶️`, grid, and hide-text buttons. Inline edits use the public media URLs, so the bot does not upload new files when you navigate.
 
-For videos, inline results use the smallest available MP4 variant. Telegram fetches inline media from the URL itself, and large 1080p X video URLs can fail with `failed to get HTTP URL content`. Direct sends are unaffected and still use the best variant under the upload limit.
+For videos, inline results probe the available MP4 variants with HEAD requests and pick the highest-quality variant under **19 MB**. Telegram fetches inline media from the URL itself, and large 1080p X video URLs can fail with `failed to get HTTP URL content`. If all known sizes exceed the cap, the smallest variant is used as a fallback. Direct sends are unaffected and still use the best variant under the upload limit.
 
 Telegram does not expose the **target chat ID** for inline queries, only the sender and the chat type. Inline results therefore cannot be filtered by the chat allowlist. Inline mode is controlled by the **user allowlist** instead: only the owner and approved users can use inline queries, and only they can operate inline gallery buttons.
 
@@ -107,7 +107,7 @@ The owner is configured with `OWNER_ID` - a numeric Telegram user ID. Only that 
 | `/allowed` | List the owner ID and every approved chat. |
 | `/allowedusers` | List every approved user. |
 | `/inlinewhitelist [on\|off]` | Enable or disable the user allowlist for inline mode. |
-| `/logs [lines]` | Send recent in-memory logs to the owner (private chat only). |
+| `/logs [lines\|all]` | Send recent in-memory logs to the owner (private chat only). |
 | `/chatid` | Show the current chat ID and the replied user's ID. |
 | `/stat` | Show usage statistics. `/stats` is an alias. |
 
@@ -253,6 +253,7 @@ src/
     stats.ts            stats singleton + safe writes
     carousel.ts         send/edit views, send albums
     download.ts         temp files, ZIP creation, cleanup
+    inlineVideo.ts      probes variants and picks best inline video size
     media.ts            capped downloads + media cache
     cache.ts            TTL/LRU cache
     x/
@@ -302,9 +303,10 @@ Recent in-process logs are available to the owner:
 ```text
 /logs
 /logs 500
+/logs all
 ```
 
-The command sends a text file with the last 200 lines by default, up to 1000. It only works in a private chat with the bot. The buffer resets on restart; persistent systemd logs are available with:
+The command sends a text file with the last 200 lines by default, up to 1000. `/logs all` uses the full buffer. It only works in a private chat with the bot. The buffer resets on restart; persistent systemd logs are available with:
 
 ```bash
 sudo journalctl -u xbot -f
@@ -341,6 +343,7 @@ The image builds the TypeScript project in a first stage and runs only productio
 - Videos are sent as normal Telegram videos, not streamed inline.
 - Inline editing uses media URLs, so private or login-walled media will not load inline.
 - Inline queries cannot be tied to a whitelisted chat ID because Telegram does not expose it; inline mode is controlled by the user allowlist or `/inlinewhitelist off`.
+- Inline video uses the highest-quality MP4 variant under 19 MB. If every variant is larger, the smallest is attempted and Telegram may still reject it.
 - `/logs` keeps only the latest 1000 emitted lines in memory. The buffer resets when the bot restarts; use `journalctl -u xbot` for persistent history.
 - Downloads are capped at 45 MB by default; larger galleries are partially included, and anything that cannot be uploaded is skipped with a notice.
 - Downloads are unavailable on inline messages because there is no chat ID to send a document to.

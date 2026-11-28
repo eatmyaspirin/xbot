@@ -31,16 +31,19 @@ async function sendLogs(ctx: Context): Promise<void> {
   let count = DEFAULT_LINES;
 
   if (arg) {
-    if (!/^\d+$/.test(arg)) {
+    if (arg.toLowerCase() === 'all') {
+      count = getLogBufferLimit();
+    } else if (!/^\d+$/.test(arg)) {
       await ctx
         .reply(
-          `Send <code>/logs</code> or <code>/logs &lt;lines&gt;</code> (1-${getLogBufferLimit()}).`,
+          `Send <code>/logs</code>, <code>/logs &lt;lines&gt;</code>, or <code>/logs all</code> (1-${getLogBufferLimit()}).`,
           { parse_mode: 'HTML' },
         )
         .catch(() => {});
       return;
+    } else {
+      count = Math.min(getLogBufferLimit(), Math.max(1, Number(arg)));
     }
-    count = Math.min(getLogBufferLimit(), Math.max(1, Number(arg)));
   }
 
   const lines = getRecentLogs(count);

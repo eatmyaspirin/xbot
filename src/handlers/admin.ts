@@ -12,7 +12,7 @@ const ADMIN_TEXT = `<b>Admin commands</b>
 <code>/allowed</code> - list approved chats
 <code>/allowedusers</code> - list approved users
 <code>/inlinewhitelist [on|off]</code> - require approved users for inline
-<code>/logs [lines]</code> - recent logs (private chat)
+<code>/logs [lines|all]</code> - recent logs (private chat)
 <code>/chatid</code> - show this chat's ID and replied user IDs
 <code>/stat</code> - usage statistics
 

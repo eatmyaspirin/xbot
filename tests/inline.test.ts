@@ -61,7 +61,7 @@ describe('buildInlineResult', () => {
     expect(result.reply_markup?.inline_keyboard.length).toBeGreaterThan(0);
   });
 
-  it('returns a video result using the smallest variant Telegram can fetch', () => {
+  it('falls back to the smallest variant when no size probe is provided', () => {
     const result = buildInlineResult(
       makePost({ media: [video], mosaicUrl: undefined }),
     );
@@ -75,6 +75,25 @@ describe('buildInlineResult', () => {
     expect(result.video_height).toBe(270);
     expect(result.thumbnail_url).toBe(video.thumbnailUrl);
     expect(result.mime_type).toBe('video/mp4');
+  });
+
+  it('uses the size-based variant choice when provided', () => {
+    const result = buildInlineResult(
+      makePost({ media: [video], mosaicUrl: undefined }),
+      {
+        video: {
+          url: 'https://video.twimg.com/avc1/1280x720/medium.mp4',
+          width: 1280,
+          height: 720,
+        },
+      },
+    );
+    expect(result?.type).toBe('video');
+    if (result?.type !== 'video' || !('video_url' in result)) return;
+
+    expect(result.video_url).toContain('1280x720');
+    expect(result.video_width).toBe(1280);
+    expect(result.video_height).toBe(720);
   });
 
   it('falls back to the primary video URL when no variants exist', () => {

@@ -1,6 +1,7 @@
 import type { Bot } from 'grammy';
 
 import { logger } from '../logger.js';
+import { pickInlineVideo } from '../services/inlineVideo.js';
 import { recordError } from '../services/stats.js';
 import { getPost } from '../services/x/index.js';
 import { extractStatusLinks } from '../utils/xurl.js';
@@ -34,7 +35,13 @@ export function registerInlineHandler(bot: Bot): void {
         return;
       }
 
-      const result = buildInlineResult(post);
+      const firstItem = post.media[0];
+      const inlineVideo =
+        firstItem?.kind === 'video'
+          ? await pickInlineVideo(firstItem)
+          : undefined;
+
+      const result = buildInlineResult(post, { video: inlineVideo });
       if (!result) {
         await ctx
           .answerInlineQuery([], {

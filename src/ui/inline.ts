@@ -18,7 +18,18 @@ function resultTitle(post: Post): string {
   return post.authorHandle ? `@${post.authorHandle}` : post.authorName;
 }
 
-export function buildInlineResult(post: Post): InlineQueryResult | null {
+export interface InlineResultOptions {
+  video?: {
+    url: string;
+    width: number;
+    height: number;
+  };
+}
+
+export function buildInlineResult(
+  post: Post,
+  options: InlineResultOptions = {},
+): InlineQueryResult | null {
   const showText = true;
   const captionFor = (view: ViewMode) => buildCaption(post, 0, { view, showText });
   const description =
@@ -80,14 +91,21 @@ export function buildInlineResult(post: Post): InlineQueryResult | null {
     case 'video': {
       if (!item.thumbnailUrl) return null;
 
-      // Telegram fetches inline media itself, and large X video URLs fail with
-      // "failed to get HTTP URL content". Use the smallest MP4 variant.
+      // The caller probes variants and chooses the best one Telegram can fetch.
+      // Without that, fall back to the smallest MP4 variant.
       const variants = item.variants ?? [];
-      const videoUrl =
-        variants.length > 0 ? variants[variants.length - 1] ?? item.url : item.url;
+      const fallbackUrl =
+        variants.length > 0
+          ? variants[variants.length - 1] ?? item.url
+          : item.url;
+      const videoUrl = options.video?.url ?? fallbackUrl;
       const dimensions = /\/(\d{2,5})x(\d{2,5})\//.exec(videoUrl);
-      const width = dimensions?.[1] ? Number(dimensions[1]) : item.width;
-      const height = dimensions?.[2] ? Number(dimensions[2]) : item.height;
+      const width =
+        options.video?.width ??
+        (dimensions?.[1] ? Number(dimensions[1]) : item.width);
+      const height =
+        options.video?.height ??
+        (dimensions?.[2] ? Number(dimensions[2]) : item.height);
 
       return {
         type: 'video',
